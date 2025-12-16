@@ -36,6 +36,8 @@ tr:nth-child(even){background:var(--l)}
 .highlight-row{background:var(--hi)!important}
 .reason{color:#555;font-size:.85rem;line-height:1.25}
 .small{font-size:.85rem}
+details{margin-top:.75rem}
+pre{white-space:pre-wrap;background:#f0f3f7;border:1px solid var(--bd);border-radius:8px;padding:.75rem}
 </style>
 </head>
 <body>
@@ -50,6 +52,10 @@ tr:nth-child(even){background:var(--l)}
       </div>
       <div class="notice" id="dataNotice"></div>
       <div class="notice danger" id="inputNotice"></div>
+      <details id="debugBox" style="display:none">
+        <summary class="muted">Debug (Rates-Mapping)</summary>
+        <pre id="debugPre"></pre>
+      </details>
     </div>
     <div>
       <div class="field">
@@ -199,12 +205,11 @@ function money(n){ return Number.isFinite(n) ? n.toLocaleString("de-DE",{minimum
 
 // ===== Data =====
 let ZONES=[], RATES=[], FORWARDERS=[], FLOATERS={};
+let RATES_DEBUG = {};
 
 async function loadZones(){
   const text = await fetchTextSmart("zones.csv");
   const rows = parseCsv(text);
-
-  // zones may start with a "Key;;;;" line, so find the real header row
   const found = findHeaderRowFlex(rows, [
     ["forwarder"],
     ["dest from","destination from"],
@@ -236,53 +241,101 @@ function detectZoneCols(headerRaw){
   const cols=[];
   for(let i=0;i<headerRaw.length;i++){
     const h=String(headerRaw[i]||"").trim();
-    // accept: "Zone 1", "Zone1", "ZONE 01"
     let m=h.match(/^zone\s*(\d+)$/i);
     if(!m) m=h.match(/^zone\s+(\d+)$/i);
-    if(m) cols.push({col:i, zone:parseInt(m[1],10)});
+    if(m) cols.push({col:i, zone:parseInt(m[1],10), name:h});
   }
   return cols;
+}
+
+function pickIndex(headerNorm, candidates){
+  for(const c of candidates){
+    const idx = headerNorm.indexOf(c);
+    if(idx>=0) return idx;
+  }
+  return -1;
+}
+
+function guessFromToColumns(rows, headerIndex, skipCols){
+  // heuristic: pick first two columns where the next non-empty row looks numeric
+  const hdr = rows[headerIndex] || [];
+  for(let i=0;i<hdr.length;i++){
+    if(skipCols.has(i)) continue;
+  }
+  // find a sample data row
+  let sample = null;
+  for(let r=headerIndex+1;r<Math.min(rows.length, headerIndex+25);r++){
+    const row = rows[r];
+    if(!row) continue;
+    if(row.some(c => String(c||"").trim().length>0)) { sample = row; break; }
+  }
+  if(!sample) return {from:-1,to:-1};
+  const numericCols=[];
+  for(let i=0;i<sample.length;i++){
+    if(skipCols.has(i)) continue;
+    const n = parseNumberDE(sample[i]);
+    if(Number.isFinite(n)) numericCols.push(i);
+  }
+  if(numericCols.length>=2) return {from:numericCols[0], to:numericCols[1]};
+  return {from:-1,to:-1};
 }
 
 async function loadRates(){
   const text = await fetchTextSmart("rates.csv");
   const rows = parseCsv(text);
 
-  // Very flexible: forwarder + from + to; unit optional; need at least one zone column
-  const found = findHeaderRowFlex(rows, [
-    ["forwarder","spediteur","carrier"],
-    ["chg from","charge from","from","lm from","ldm from","lademeter from"],
-    ["chg to","charge to","to","lm to","ldm to","lademeter to"],
-  ]);
-  if(!found) throw new Error("rates.csv: Header nicht gefunden (Forwarder / CHG from / CHG to / ...).");
+  // header must contain forwarder AND at least one Zone column.
+  // From/To will be matched by name or guessed by numeric columns.
+  let found = null;
+  for (let i=0;i<Math.min(rows.length, 50);i++){
+    const hn = rows[i].map(c=>normalizeHeader(c));
+    const hasF = hn.includes("forwarder") || hn.includes("spediteur") || hn.includes("carrier") || hn.includes("dienstleister");
+    const zoneCols = detectZoneCols(rows[i]);
+    if(hasF && zoneCols.length>0){
+      found = {headerIndex:i, headerNorm:hn, headerRaw:rows[i], zoneCols};
+      break;
+    }
+  }
+  if(!found){
+    // fallback: old strict matching
+    const strict = findHeaderRowFlex(rows, [
+      ["forwarder","spediteur","carrier","dienstleister"],
+      ["chg from","charge from","from","von","ab","lm from","ldm from","lademeter from"],
+      ["chg to","charge to","to","bis","end","lm to","ldm to","lademeter to"]
+    ]);
+    if(!strict) throw new Error("rates.csv: Header nicht gefunden (Forwarder / CHG from / CHG to / ...).");
+    found = {...strict, zoneCols: detectZoneCols(strict.headerRaw)};
+  }
 
   const h = found.headerNorm;
-  const idxF = h.indexOf("forwarder")>=0 ? h.indexOf("forwarder") : (h.indexOf("spediteur")>=0 ? h.indexOf("spediteur") : h.indexOf("carrier"));
+  const idxF = h.indexOf("forwarder")>=0 ? h.indexOf("forwarder")
+            : (h.indexOf("spediteur")>=0 ? h.indexOf("spediteur")
+            : (h.indexOf("carrier")>=0 ? h.indexOf("carrier")
+            : (h.indexOf("dienstleister")>=0 ? h.indexOf("dienstleister") : -1)));
+  if(idxF<0) throw new Error("rates.csv: Forwarder-Spalte nicht erkannt.");
 
-  function pickIndex(candidates){
-    for(const c of candidates){
-      const idx = h.indexOf(c);
-      if(idx>=0) return idx;
-    }
-    return -1;
+  // candidates
+  const idxFromName = pickIndex(h, ["chg from","charge from","lm from","ldm from","lademeter from","from","von","ab","lm von","ldm von","ldm ab"]);
+  const idxToName   = pickIndex(h, ["chg to","charge to","lm to","ldm to","lademeter to","to","bis","end","lm bis","ldm bis","ldm ende"]);
+  const idxUnit = pickIndex(h, ["unit","einheit"]);
+
+  const zoneCols = found.zoneCols && found.zoneCols.length ? found.zoneCols : detectZoneCols(found.headerRaw);
+  if(!zoneCols.length) throw new Error("rates.csv: Keine Zone-Spalten gefunden (Zone 1 / Zone 2 / ...).");
+
+  const skipCols = new Set([idxF]);
+  if(idxUnit>=0) skipCols.add(idxUnit);
+  for(const zc of zoneCols) skipCols.add(zc.col);
+
+  let idxFrom = idxFromName;
+  let idxTo = idxToName;
+  if(idxFrom<0 || idxTo<0){
+    const g = guessFromToColumns(rows, found.headerIndex, skipCols);
+    if(idxFrom<0) idxFrom = g.from;
+    if(idxTo<0) idxTo = g.to;
   }
-  const idxFrom = pickIndex(["chg from","charge from","lm from","ldm from","lademeter from","from"]);
-  const idxTo   = pickIndex(["chg to","charge to","lm to","ldm to","lademeter to","to"]);
-  if(idxFrom<0 || idxTo<0) throw new Error("rates.csv: Konnte From/To-Spalten nicht erkennen.");
-
-  const idxUnit = pickIndex(["unit","einheit"]);
-
-  const zoneCols = detectZoneCols(found.headerRaw);
-  if(!zoneCols.length){
-    // try using normalized header (in case of weird spaces)
-    const zoneCols2 = [];
-    for(let i=0;i<found.headerRaw.length;i++){
-      const nh = normalizeHeader(found.headerRaw[i]);
-      const m = nh.match(/^zone\s*(\d+)$/);
-      if(m) zoneCols2.push({col:i, zone:parseInt(m[1],10)});
-    }
-    if(!zoneCols2.length) throw new Error("rates.csv: Keine Zone-Spalten gefunden (Zone 1 / Zone 2 / ...).");
-    zoneCols.splice(0, zoneCols.length, ...zoneCols2);
+  if(idxFrom<0 || idxTo<0){
+    RATES_DEBUG = {headerRaw: found.headerRaw, headerNorm: found.headerNorm, idxF, idxFrom, idxTo, idxUnit, zoneCols: zoneCols.map(z=>({col:z.col,zone:z.zone,name:z.name}))};
+    throw new Error("rates.csv: Konnte CHG from / CHG to Spalten nicht erkennen (auch Heuristik fehlgeschlagen).");
   }
 
   const data=[];
@@ -304,6 +357,7 @@ async function loadRates(){
     data.push({forwarder:fwd, from, to, unit, zonePrices});
   }
   RATES=data;
+  RATES_DEBUG = {headerRaw: found.headerRaw, headerNorm: found.headerNorm, idxF, idxFrom, idxTo, idxUnit, zoneCols: zoneCols.map(z=>({col:z.col,zone:z.zone,name:z.name}))};
 }
 
 async function loadFloaters(){
@@ -314,7 +368,6 @@ async function loadFloaters(){
     if(typeof FLOATERS !== "object" || FLOATERS==null) FLOATERS = {};
   }catch(e){
     FLOATERS = {};
-    // don't crash; just treat as 0%
   }
 }
 
@@ -330,6 +383,8 @@ const summary=document.getElementById("summary");
 const inputNotice=document.getElementById("inputNotice");
 const dataNotice=document.getElementById("dataNotice");
 const calcBtn=document.getElementById("calc");
+const debugBox=document.getElementById("debugBox");
+const debugPre=document.getElementById("debugPre");
 
 let lmPerPallet=0.4;
 let lmManuallyOverridden=false;
@@ -363,6 +418,7 @@ document.getElementById("reset").addEventListener("click",()=>{
   badge04.classList.add("active"); badge05.classList.remove("active");
   summary.style.display="none"; summary.innerHTML="";
   renderSkeleton(); updateMode(); clearInputErr();
+  debugBox.style.display="none"; debugPre.textContent="";
 });
 
 document.addEventListener("keydown",(e)=>{ if(e.key==="Enter" && !calcBtn.disabled){ e.preventDefault(); calcBtn.click(); } });
@@ -427,8 +483,8 @@ function findZone(fwd, plzStr){
 
 function unitIsLM(unit){
   const u=String(unit||"").toLowerCase();
-  if(!u) return true; // if no unit column → assume LM tariffs
-  return u.includes("lm") || u.includes("lademeter") || u.includes("ldm") || u.includes("ldm") || u.includes("lm/pal") || u.includes("ldm/pal");
+  if(!u) return true;
+  return u.includes("lm") || u.includes("lademeter") || u.includes("ldm");
 }
 
 function findRateRow(fwd,lm){
@@ -485,8 +541,20 @@ async function init(){
     FORWARDERS = uniq([...ZONES.map(z=>z.forwarder), ...RATES.map(r=>r.forwarder)]);
     showDataNotice(`Daten geladen: <b>${FORWARDERS.length}</b> Spediteure aus zones.csv / rates.csv. Floater aus floater.json.`);
     renderSkeleton();
+
+    // Show rates mapping debug (useful until everything works)
+    debugBox.style.display="block";
+    debugPre.textContent = JSON.stringify(RATES_DEBUG, null, 2);
+
   } catch (err) {
     showDataNotice(`Fehler beim Laden der CSV-Dateien.<br><span class="muted">${String(err.message||err)}</span>`, true);
+    if (typeof RATES_DEBUG === "object" && Object.keys(RATES_DEBUG||{}).length){
+      debugBox.style.display="block";
+      debugPre.textContent = JSON.stringify(RATES_DEBUG, null, 2);
+    } else {
+      debugBox.style.display="none";
+      debugPre.textContent="";
+    }
     FORWARDERS=[];
     renderSkeleton();
   }
