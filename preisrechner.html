@@ -1,516 +1,499 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Papierwerk Sundern Preisrechner</title>
-  <style>
-    :root{
-      --blue:#0b5ea8;
-      --bg:#f5f7fa;
-      --card:#ffffff;
-      --border:#dfe6ee;
-      --muted:#6b7684;
-      --good:#dff3e1;
-      --bad:#f8d7da;
-      --warn:#fff3cd;
-    }
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);margin:0;color:#1f2937}
-    .wrap{max-width:1400px;margin:22px auto;padding:0 16px}
-    h1{margin:0 0 12px;color:var(--blue);font-size:32px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.05);padding:16px}
-    .grid{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;align-items:start}
-    @media (max-width: 1000px){.grid{grid-template-columns:1fr}}
-    label{font-weight:600;font-size:13px;color:#2b3643}
-    input{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px}
-    input[readonly]{background:#eef4ff}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px}
-    @media (max-width: 700px){.row{grid-template-columns:1fr}}
-    .actions{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
-    button{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}
-    button.secondary{background:#fff;color:#1f2937;border:1px solid var(--border);font-weight:600}
-    button:hover{filter:brightness(.97)}
-    .note{font-size:13px;color:var(--muted);margin-top:8px}
-    .msg{border-radius:10px;padding:10px 12px;margin-top:10px;border:1px solid transparent}
-    .msg.warn{background:var(--warn);border-color:#ffe69c}
-    .msg.bad{background:var(--bad);border-color:#f1aeb5}
-    .msg.good{background:var(--good);border-color:#b6e2bb}
-    table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:10px;border:1px solid var(--border);margin-top:14px;background:#fff}
-    thead th{background:var(--blue);color:#fff;padding:10px 10px;font-size:13px;text-align:left}
-    tbody td{padding:10px 10px;border-top:1px solid var(--border);font-size:14px}
-    tbody tr:nth-child(even){background:#f8fbff}
-    tbody tr.best{background:var(--good)!important}
-    .right{text-align:right}
-    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2f7;color:#344255;font-size:12px;margin-left:8px}
-    .muted{color:var(--muted)}
-    .small{font-size:12px}
-    .split{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    .kv{display:flex;gap:10px;flex-wrap:wrap}
-    .kv div{font-size:13px;color:#243141}
-    .kv b{color:#111827}
-  </style>
+<meta charset="utf-8"/>
+<title>Papierwerk Sundern Preisrechner</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<style>
+:root{--b:#005A99;--t:#00A99D;--l:#F2F6F8;--w:#fff;--bd:#d6d6d6;--hi:#d4edda;--warn:#fff3cd;--err:#f8d7da;}
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:var(--l);margin:2rem;color:#333}
+h1{color:var(--b);margin:0 0 1rem 0}
+.card{background:var(--w);border:1px solid var(--bd);border-radius:10px;padding:1rem;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:1rem}
+.inputs{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:860px){.inputs{grid-template-columns:1fr}}
+.field{display:grid;grid-template-columns:160px 1fr;gap:.75rem;align-items:center;margin-bottom:.75rem}
+label{font-weight:600}
+input{width:100%;padding:.5rem .6rem;border:1px solid var(--bd);border-radius:6px;font-size:1rem}
+.hint{font-size:.9rem;color:#555;line-height:1.3}
+.actions{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-top:.5rem}
+#calc{background:var(--b);color:#fff;border:0;border-radius:6px;padding:.6rem 1.1rem;font-weight:600;cursor:pointer}
+#calc:hover{background:var(--t)}
+#calc:disabled{opacity:.55;cursor:not-allowed}
+.secondary{background:transparent;border:1px solid var(--bd);border-radius:6px;padding:.6rem 1.1rem;cursor:pointer}
+.notice{display:none;margin-top:.75rem;padding:.75rem 1rem;border:1px solid var(--bd);border-radius:8px;background:var(--warn)}
+.notice.danger{background:var(--err)}
+.summary{display:none;margin-top:1rem;padding:1rem;background:var(--hi);border:1px solid var(--bd);border-radius:8px}
+table{width:100%;border-collapse:collapse;background:var(--w);border:1px solid var(--bd);border-radius:10px;overflow:hidden}
+th,td{padding:.8rem;border-bottom:1px solid var(--bd);vertical-align:top}
+th{background:var(--b);color:#fff;text-align:left}
+tr:nth-child(even){background:var(--l)}
+.right{text-align:right}
+.muted{color:#666;font-size:.9rem}
+.badge{display:inline-block;padding:.15rem .5rem;border-radius:999px;border:1px solid var(--bd);font-size:.85rem;background:#fff}
+.badge.clickable{cursor:pointer;user-select:none}
+.badge.active{border-color:var(--b);box-shadow:0 0 0 2px rgba(0,90,153,.12)}
+.highlight-row{background:var(--hi)!important}
+.reason{color:#555;font-size:.85rem;line-height:1.25}
+.small{font-size:.85rem}
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Papierwerk Sundern Preisrechner</h1>
+<h1>Papierwerk Sundern Preisrechner</h1>
 
-    <div class="card">
-      <div class="grid">
-        <div>
-          <div class="row">
-            <div>
-              <label for="plz">PLZ (Empfänger)</label>
-              <input id="plz" inputmode="numeric" placeholder="z. B. 04525" maxlength="5" />
-            </div>
-            <div>
-              <label for="paletten">Paletten</label>
-              <input id="paletten" inputmode="numeric" type="number" min="0" step="1" placeholder="z. B. 6" />
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label for="lm">Lademeter (LM)</label>
-              <input id="lm" inputmode="decimal" placeholder="auto aus Paletten" />
-              <div class="note">Standard: 1 Palette = <b>0,4 LM</b>. Du kannst abweichend auch z. B. <b>0,5</b> setzen oder LM direkt überschreiben.</div>
-            </div>
-            <div>
-              <label>&nbsp;</label>
-              <div class="actions">
-                <button id="btnCalc">Berechnen</button>
-                <button class="secondary" id="btnReset">Zurücksetzen</button>
-                <span class="note" id="lmHint">LM wird aus Paletten berechnet (0,4 LM/Palette)</span>
-              </div>
-            </div>
-          </div>
-
-          <div id="status" class="msg warn" style="display:none"></div>
-
-          <div id="summary" class="msg good" style="display:none">
-            <div class="kv" id="summaryKv"></div>
-          </div>
-        </div>
-
-        <div>
-          <div id="dataInfo" class="msg warn" style="display:none"></div>
-          <div class="note small">
-            Dateien werden relativ geladen: <b>zones.csv</b>, <b>rates.csv</b>, <b>floater.json</b>.
-          </div>
-        </div>
+<div class="card">
+  <div class="inputs">
+    <div>
+      <div class="field">
+        <label for="plz">PLZ (Empfänger):</label>
+        <input id="plz" type="text" inputmode="numeric" maxlength="5" placeholder="z. B. 04525">
+      </div>
+      <div class="notice" id="dataNotice"></div>
+      <div class="notice danger" id="inputNotice"></div>
+    </div>
+    <div>
+      <div class="field">
+        <label for="pallets">Paletten:</label>
+        <input id="pallets" type="number" min="0" step="1" placeholder="z. B. 6">
+      </div>
+      <div class="field">
+        <label for="lademeter">Lademeter (LM):</label>
+        <input id="lademeter" type="number" min="0" step="0.1" max="15" placeholder="auto aus Paletten">
+      </div>
+      <div class="hint">
+        Standard: 1 Palette =
+        <span id="badge04" class="badge clickable active">0,4 LM</span>.
+        Du kannst abweichend auch z. B.
+        <span id="badge05" class="badge clickable">0,5</span>
+        setzen oder LM direkt überschreiben.
+      </div>
+      <div class="actions">
+        <button id="calc" type="button">Berechnen</button>
+        <button class="secondary" type="button" id="reset">Zurücksetzen</button>
+        <span class="muted" id="modeLabel"></span>
+      </div>
+      <div class="muted small" style="margin-top:.5rem;">
+        Dateien werden relativ geladen: <b>zones.csv</b>, <b>rates.csv</b>, <b>floater.json</b>.
       </div>
     </div>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Spediteur</th>
-          <th>Zone</th>
-          <th class="right">Basis (€)</th>
-          <th class="right">Floater (%)</th>
-          <th class="right">Floater (€)</th>
-          <th class="right">Preis (€)</th>
-          <th>Grund</th>
-        </tr>
-      </thead>
-      <tbody id="tbody">
-        <tr><td colspan="7" class="muted">Noch keine Berechnung.</td></tr>
-      </tbody>
-    </table>
   </div>
+  <div class="summary" id="summary"></div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Spediteur</th>
+      <th>Zone</th>
+      <th class="right">Basis (€)</th>
+      <th class="right">Floater (%)</th>
+      <th class="right">Floater (€)</th>
+      <th class="right">Preis (€)</th>
+      <th>Grund</th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
 
 <script>
-/** ----------------------------
- *  Konfiguration / Helpers
- *  ---------------------------- */
-const DEFAULT_LM_PER_PAL = 0.4;
-const MAX_LM = 15;
+// ===== Robust CSV helpers (UTF-16 + TAB/;/,) =====
+async function fetchTextSmart(url){
+  const res = await fetch(url, {cache:"no-store"});
+  if (!res.ok) throw new Error(url + " konnte nicht geladen werden (HTTP " + res.status + ")");
+  const buf = await res.arrayBuffer();
+  const u8 = new Uint8Array(buf);
 
-const $ = (id) => document.getElementById(id);
-const plzEl = $("plz");
-const palEl = $("paletten");
-const lmEl  = $("lm");
-const tbody = $("tbody");
-const statusBox = $("status");
-const summaryBox = $("summary");
-const summaryKv = $("summaryKv");
-const dataInfo = $("dataInfo");
-const lmHint = $("lmHint");
+  function hasBom(bytes, b0, b1){ return bytes.length >= 2 && bytes[0] === b0 && bytes[1] === b1; }
 
-function showBox(el, cls, html){
-  el.className = "msg " + cls;
-  el.innerHTML = html;
-  el.style.display = "block";
-}
-function hideBox(el){ el.style.display="none"; el.innerHTML=""; }
-
-function money(n){
-  if(!Number.isFinite(n)) return "—";
-  return n.toLocaleString("de-DE",{minimumFractionDigits:2, maximumFractionDigits:2});
-}
-function parseNumberDE(v){
-  if(v==null) return NaN;
-  const s = String(v).replace(/\u00A0/g,' ').trim(); // nbsp
-  if(!s) return NaN;
-  // strip currency and spaces
-  const cleaned = s.replace(/€/g,'').replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.');
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : NaN;
-}
-function normHeader(s){
-  return String(s||"")
-    .replace(/^\uFEFF/,'') // BOM
-    .replace(/\u00A0/g,' ')
-    .trim()
-    .toLowerCase();
-}
-function parseCsv(text){
-  // delimiter guess: prefer ';'
-  const sample = text.split(/\r?\n/).slice(0,5).join("\n");
-  const semis = (sample.match(/;/g)||[]).length;
-  const commas = (sample.match(/,/g)||[]).length;
-  const delim = semis >= commas ? ";" : ",";
-
-  const rows = [];
-  let row = [];
-  let cur = "";
-  let inQ = false;
-  for(let i=0;i<text.length;i++){
-    const ch = text[i];
-    if(ch === '"'){
-      if(inQ && text[i+1] === '"'){ cur += '"'; i++; }
-      else inQ = !inQ;
-    } else if(!inQ && ch === delim){
-      row.push(cur); cur="";
-    } else if(!inQ && (ch === "\n" || ch === "\r")){
-      if(ch === "\r" && text[i+1] === "\n") i++;
-      row.push(cur); cur="";
-      // ignore fully empty trailing lines
-      if(row.some(c => String(c).trim() !== "")) rows.push(row);
-      row = [];
-    } else {
-      cur += ch;
+  let encoding = "utf-8";
+  if (hasBom(u8, 0xFF, 0xFE)) encoding = "utf-16le";
+  else if (hasBom(u8, 0xFE, 0xFF)) encoding = "utf-16be";
+  else {
+    let nul = 0;
+    for (let i=0;i<Math.min(u8.length, 2000);i++) if (u8[i] === 0) nul++;
+    if (nul > 50) {
+      let nulEven = 0, nulOdd = 0;
+      for (let i=0;i<Math.min(u8.length, 2000);i++){
+        if (u8[i] === 0) { if (i % 2 === 0) nulEven++; else nulOdd++; }
+      }
+      encoding = (nulOdd > nulEven) ? "utf-16le" : "utf-16be";
     }
   }
-  row.push(cur);
-  if(row.some(c => String(c).trim() !== "")) rows.push(row);
-  return {rows, delim};
+  const dec = new TextDecoder(encoding);
+  return dec.decode(buf);
 }
 
-/** ----------------------------
- *  Datenmodelle
- *  ---------------------------- */
-let ZONES = [];   // {forwarder, from, to, zone}
-let RATES = [];   // {forwarder, from, to, unit, pricesByZone: { [zoneNumber]: price }}
-let FLOATERS = {}; // { forwarder: pct }
-
-function unique(arr){ return Array.from(new Set(arr)); }
-
-/** ----------------------------
- *  Loader
- *  ---------------------------- */
-async function fetchText(url){
-  const r = await fetch(url, {cache:"no-store"});
-  if(!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
-  return await r.text();
-}
-async function fetchJson(url){
-  const r = await fetch(url, {cache:"no-store"});
-  if(!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
-  return await r.json();
+function normalizeHeader(s){
+  return String(s||"")
+    .replace(/\u0000/g,"")
+    .toLowerCase()
+    .replace(/[\u00A0]/g," ")
+    .replace(/[_\-]/g," ")
+    .replace(/\s+/g," ")
+    .trim();
 }
 
-function findHeaderRow(rows, required){
-  for(let i=0;i<Math.min(rows.length, 20); i++){
-    const h = rows[i].map(normHeader);
-    const ok = required.every(k => h.includes(k));
-    if(ok) return {i, h};
+function detectDelimiter(text){
+  text = text.replace(/\u0000/g,"");
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim().length>0);
+  const sample = lines.slice(0,5).join("\n");
+  const sc = (sample.match(/;/g)||[]).length;
+  const tc = (sample.match(/\t/g)||[]).length;
+  const cc = (sample.match(/,/g)||[]).length;
+  if (tc >= sc && tc >= cc && tc > 0) return "\t";
+  if (sc >= cc && sc > 0) return ";";
+  return ",";
+}
+
+function parseCsv(text){
+  text = text.replace(/^\uFEFF/, "").replace(/\u0000/g,"");
+  const delim = detectDelimiter(text);
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length>0);
+  const out = [];
+  for (const line of lines){
+    const row = [];
+    let cur = "";
+    let inQ = false;
+    for (let i=0;i<line.length;i++){
+      const ch = line[i];
+      if (ch === '"'){
+        if (inQ && line[i+1] === '"'){ cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (ch === delim && !inQ){
+        row.push(cur); cur = "";
+      } else cur += ch;
+    }
+    row.push(cur);
+    out.push(row.map(v => String(v ?? "").trim().replace(/\u0000/g,"")));
+  }
+  return out;
+}
+
+function findHeaderRowFlex(rows, requiredGroups){
+  for (let i=0;i<Math.min(rows.length, 50);i++){
+    const rowNorm = rows[i].map(c => normalizeHeader(c));
+    let ok = true;
+    for (const group of requiredGroups){
+      if (!group.some(g => rowNorm.includes(g))) { ok = false; break; }
+    }
+    if (ok) return { headerIndex:i, headerNorm:rowNorm, headerRaw: rows[i] };
   }
   return null;
 }
 
+function parseNumberDE(s){
+  if (s == null) return NaN;
+  const t = String(s).trim();
+  if (!t) return NaN;
+  return Number(t.replace(/\./g,"").replace(",", "."));
+}
+function parseEuroDE(s){
+  if (s == null) return NaN;
+  return parseNumberDE(String(s).replace("€","").trim());
+}
+function uniq(arr){
+  return Array.from(new Set(arr)).filter(Boolean).sort((a,b)=>a.localeCompare(b,"de"));
+}
+function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
+function money(n){ return Number.isFinite(n) ? n.toLocaleString("de-DE",{minimumFractionDigits:2, maximumFractionDigits:2}) : "—"; }
+
+// ===== Data =====
+let ZONES=[], RATES=[], FORWARDERS=[], FLOATERS={};
+
 async function loadZones(){
-  const text = await fetchText("zones.csv");
-  const {rows} = parseCsv(text);
+  const text = await fetchTextSmart("zones.csv");
+  const rows = parseCsv(text);
 
-  // zones.csv can have a first "Key;;;;" row → find the real header row
-  const found = findHeaderRow(rows, ["forwarder","dest from","dest to","zone"]);
-  if(!found) throw new Error("zones.csv: Header nicht gefunden (Forwarder / Dest From / Dest To / Zone).");
+  // zones may start with a "Key;;;;" line, so find the real header row
+  const found = findHeaderRowFlex(rows, [
+    ["forwarder"],
+    ["dest from","destination from"],
+    ["dest to","destination to"],
+    ["zone"]
+  ]);
+  if(!found) throw new Error("zones.csv: Header nicht gefunden (Forwarder / Dest From / Dest To / Zone)");
 
-  const idxF = found.h.indexOf("forwarder");
-  const idxA = found.h.indexOf("dest from");
-  const idxB = found.h.indexOf("dest to");
-  const idxZ = found.h.indexOf("zone");
+  const idxF = found.headerNorm.indexOf("forwarder");
+  const idxFrom = found.headerNorm.indexOf("dest from")>=0 ? found.headerNorm.indexOf("dest from") : found.headerNorm.indexOf("destination from");
+  const idxTo = found.headerNorm.indexOf("dest to")>=0 ? found.headerNorm.indexOf("dest to") : found.headerNorm.indexOf("destination to");
+  const idxZone = found.headerNorm.indexOf("zone");
 
-  const out = [];
-  for(let r=found.i+1; r<rows.length; r++){
-    const row = rows[r];
-    const f = (row[idxF]||"").trim();
-    if(!f) continue;
-    const a = parseInt(String(row[idxA]||"").trim(),10);
-    const b = parseInt(String(row[idxB]||"").trim(),10);
-    const z = parseInt(String(row[idxZ]||"").trim(),10);
-    if(!Number.isFinite(a) || !Number.isFinite(b) || !Number.isFinite(z)) continue;
-    out.push({forwarder:f, from:a, to:b, zone:z});
+  const data=[];
+  for(let i=found.headerIndex+1;i<rows.length;i++){
+    const r=rows[i];
+    const fwd=(r[idxF]||"").trim();
+    if(!fwd) continue;
+    const from=parseNumberDE(r[idxFrom]);
+    const to=parseNumberDE(r[idxTo]);
+    const zone=parseInt(String(r[idxZone]||"").trim(),10);
+    if(!Number.isFinite(from)||!Number.isFinite(to)||!Number.isFinite(zone)) continue;
+    data.push({forwarder:fwd, from, to, zone});
   }
-  ZONES = out;
+  ZONES=data;
+}
+
+function detectZoneCols(headerRaw){
+  const cols=[];
+  for(let i=0;i<headerRaw.length;i++){
+    const h=String(headerRaw[i]||"").trim();
+    // accept: "Zone 1", "Zone1", "ZONE 01"
+    let m=h.match(/^zone\s*(\d+)$/i);
+    if(!m) m=h.match(/^zone\s+(\d+)$/i);
+    if(m) cols.push({col:i, zone:parseInt(m[1],10)});
+  }
+  return cols;
 }
 
 async function loadRates(){
-  const text = await fetchText("rates.csv");
-  const {rows} = parseCsv(text);
+  const text = await fetchTextSmart("rates.csv");
+  const rows = parseCsv(text);
 
-  // Find header row: Forwarder + CHG from + CHG to + Unit + at least Zone 1 column
-  let headerIdx = -1;
-  let header = null;
-  for(let i=0;i<Math.min(rows.length, 30); i++){
-    const h = rows[i].map(normHeader);
-    if(h.includes("forwarder") && (h.includes("chg from") || h.includes("charge from") || h.includes("from")) &&
-       (h.includes("chg to") || h.includes("charge to") || h.includes("to")) &&
-       h.includes("unit") && h.some(x => /^zone\s*\d+$/.test(x))){
-      headerIdx = i; header = h; break;
+  // Very flexible: forwarder + from + to; unit optional; need at least one zone column
+  const found = findHeaderRowFlex(rows, [
+    ["forwarder","spediteur","carrier"],
+    ["chg from","charge from","from","lm from","ldm from","lademeter from"],
+    ["chg to","charge to","to","lm to","ldm to","lademeter to"],
+  ]);
+  if(!found) throw new Error("rates.csv: Header nicht gefunden (Forwarder / CHG from / CHG to / ...).");
+
+  const h = found.headerNorm;
+  const idxF = h.indexOf("forwarder")>=0 ? h.indexOf("forwarder") : (h.indexOf("spediteur")>=0 ? h.indexOf("spediteur") : h.indexOf("carrier"));
+
+  function pickIndex(candidates){
+    for(const c of candidates){
+      const idx = h.indexOf(c);
+      if(idx>=0) return idx;
     }
+    return -1;
   }
-  if(headerIdx < 0) throw new Error("rates.csv: Header nicht gefunden (Forwarder / CHG from / CHG to / Unit / Zone n).");
+  const idxFrom = pickIndex(["chg from","charge from","lm from","ldm from","lademeter from","from"]);
+  const idxTo   = pickIndex(["chg to","charge to","lm to","ldm to","lademeter to","to"]);
+  if(idxFrom<0 || idxTo<0) throw new Error("rates.csv: Konnte From/To-Spalten nicht erkennen.");
 
-  const idxF = header.indexOf("forwarder");
-  const idxFrom = header.indexOf("chg from") >= 0 ? header.indexOf("chg from") : (header.indexOf("charge from") >= 0 ? header.indexOf("charge from") : header.indexOf("from"));
-  const idxTo = header.indexOf("chg to") >= 0 ? header.indexOf("chg to") : (header.indexOf("charge to") >= 0 ? header.indexOf("charge to") : header.indexOf("to"));
-  const idxUnit = header.indexOf("unit");
+  const idxUnit = pickIndex(["unit","einheit"]);
 
-  const zoneCols = [];
-  header.forEach((h, idx) => {
-    const m = h.match(/^zone\s*(\d+)$/);
-    if(m) zoneCols.push({zone: parseInt(m[1],10), idx});
-  });
+  const zoneCols = detectZoneCols(found.headerRaw);
+  if(!zoneCols.length){
+    // try using normalized header (in case of weird spaces)
+    const zoneCols2 = [];
+    for(let i=0;i<found.headerRaw.length;i++){
+      const nh = normalizeHeader(found.headerRaw[i]);
+      const m = nh.match(/^zone\s*(\d+)$/);
+      if(m) zoneCols2.push({col:i, zone:parseInt(m[1],10)});
+    }
+    if(!zoneCols2.length) throw new Error("rates.csv: Keine Zone-Spalten gefunden (Zone 1 / Zone 2 / ...).");
+    zoneCols.splice(0, zoneCols.length, ...zoneCols2);
+  }
 
-  const out = [];
-  for(let r=headerIdx+1; r<rows.length; r++){
-    const row = rows[r];
-    const f = (row[idxF]||"").trim();
-    if(!f) continue;
-    const unit = (row[idxUnit]||"").trim();
-    const from = parseNumberDE(row[idxFrom]);
-    const to   = parseNumberDE(row[idxTo]);
+  const data=[];
+  for(let i=found.headerIndex+1;i<rows.length;i++){
+    const r=rows[i];
+    const fwd=(r[idxF]||"").trim();
+    if(!fwd) continue;
+    const from=parseNumberDE(r[idxFrom]);
+    const to=parseNumberDE(r[idxTo]);
+    const unit = idxUnit>=0 ? String(r[idxUnit]||"").trim() : "";
 
-    const prices = {};
+    const zonePrices=new Map();
     for(const zc of zoneCols){
-      const p = parseNumberDE(row[zc.idx]);
-      if(Number.isFinite(p)) prices[zc.zone] = p;
+      const raw=r[zc.col];
+      if(raw==null||String(raw).trim()==="") continue;
+      const eur=parseEuroDE(raw);
+      if(Number.isFinite(eur)) zonePrices.set(zc.zone, eur);
     }
-    out.push({forwarder:f, from, to, unit, pricesByZone: prices});
+    data.push({forwarder:fwd, from, to, unit, zonePrices});
   }
-  RATES = out;
+  RATES=data;
 }
 
 async function loadFloaters(){
   try{
-    FLOATERS = await fetchJson("floater.json");
+    const r = await fetch("floater.json", {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    FLOATERS = await r.json();
+    if(typeof FLOATERS !== "object" || FLOATERS==null) FLOATERS = {};
   }catch(e){
-    // if file missing → default empty, but show warning
     FLOATERS = {};
-    showBox(dataInfo, "warn", `Hinweis: <b>floater.json</b> konnte nicht geladen werden. Floater wird als 0% angenommen.<br><span class="small">${e.message}</span>`);
+    // don't crash; just treat as 0%
   }
 }
 
-/** ----------------------------
- *  Berechnung
- *  ---------------------------- */
-function plzValid(s){
-  return /^\d{5}$/.test(String(s||"").trim());
+// ===== UI =====
+const plz=document.getElementById("plz");
+const pallets=document.getElementById("pallets");
+const lademeter=document.getElementById("lademeter");
+const modeLabel=document.getElementById("modeLabel");
+const badge04=document.getElementById("badge04");
+const badge05=document.getElementById("badge05");
+const tbody=document.getElementById("tbody");
+const summary=document.getElementById("summary");
+const inputNotice=document.getElementById("inputNotice");
+const dataNotice=document.getElementById("dataNotice");
+const calcBtn=document.getElementById("calc");
+
+let lmPerPallet=0.4;
+let lmManuallyOverridden=false;
+
+function toNumInput(el){ const v=String(el.value||"").replace(",","."); const n=Number(v); return Number.isFinite(n)?n:0; }
+function calcLM(){ const p=toNumInput(pallets); const lm=p*lmPerPallet; lademeter.value=(Math.round(lm*10)/10).toString(); }
+function setFactor(f){ lmPerPallet=f; badge04.classList.toggle("active",f===0.4); badge05.classList.toggle("active",f===0.5); if(!lmManuallyOverridden) calcLM(); updateMode(); validate(); }
+function updateMode(){ modeLabel.textContent = lmManuallyOverridden ? "LM manuell überschrieben" : `LM wird aus Paletten berechnet (${lmPerPallet.toFixed(1).replace(".",",")} LM/Palette)`; }
+function showInputErr(msg){ inputNotice.style.display="block"; inputNotice.innerHTML=`<b style="color:#842029">${msg}</b>`; calcBtn.disabled=true; }
+function clearInputErr(){ inputNotice.style.display="none"; inputNotice.innerHTML=""; calcBtn.disabled=false; }
+function normPlz(){ const c=(plz.value||"").replace(/\D/g,""); plz.value=c.slice(0,5); }
+function validate(){
+  normPlz();
+  const pv=plz.value.trim();
+  const lm=toNumInput(lademeter);
+  if(pv.length!==5){ showInputErr("PLZ muss genau 5-stellig sein."); return false; }
+  if(!(lm>0)){ showInputErr("Lademeter muss größer 0 sein."); return false; }
+  if(lm>15){ showInputErr("Lademeter dürfen maximal 15 sein."); return false; }
+  clearInputErr(); return true;
 }
 
-function computeLm(){
-  const pal = Number(palEl.value);
-  const lmStr = String(lmEl.value||"").trim();
+plz.addEventListener("input",()=>{ normPlz(); validate(); });
+pallets.addEventListener("input",()=>{ if(!lmManuallyOverridden) calcLM(); updateMode(); validate(); });
+lademeter.addEventListener("input",()=>{ lmManuallyOverridden=true; updateMode(); validate(); });
+badge04.addEventListener("click",()=>setFactor(0.4));
+badge05.addEventListener("click",()=>setFactor(0.5));
 
-  if(lmStr === "" || lmStr.toLowerCase().includes("auto")){
-    const lm = (Number.isFinite(pal) ? pal : 0) * DEFAULT_LM_PER_PAL;
-    lmHint.textContent = `LM wird aus Paletten berechnet (${DEFAULT_LM_PER_PAL.toLocaleString("de-DE")} LM/Palette)`;
-    return {lm, mode:"auto"};
-  }else{
-    const lm = parseNumberDE(lmStr);
-    lmHint.textContent = "LM manuell überschrieben";
-    return {lm, mode:"manual"};
-  }
+document.getElementById("reset").addEventListener("click",()=>{
+  plz.value=""; pallets.value=""; lademeter.value="";
+  lmPerPallet=0.4; lmManuallyOverridden=false;
+  badge04.classList.add("active"); badge05.classList.remove("active");
+  summary.style.display="none"; summary.innerHTML="";
+  renderSkeleton(); updateMode(); clearInputErr();
+});
+
+document.addEventListener("keydown",(e)=>{ if(e.key==="Enter" && !calcBtn.disabled){ e.preventDefault(); calcBtn.click(); } });
+
+function showDataNotice(html, danger=false){
+  dataNotice.style.display="block";
+  dataNotice.classList.toggle("danger", danger);
+  dataNotice.innerHTML = html;
 }
 
-function findZoneFor(plz, forwarder){
-  // zones ranges are numeric "dest from/to" (0..99999)
-  const p = Number(plz);
-  const z = ZONES.find(r => r.forwarder === forwarder && p >= r.from && p <= r.to);
-  return z ? z.zone : null;
-}
-
-function unitIsLM(unit){
-  const u = String(unit||"").toLowerCase();
-  return u.includes("lm") || u.includes("lademeter") || u.includes("ldm");
-}
-
-function findBasePrice(forwarder, zone, lm){
-  const rows = RATES
-    .filter(r => r.forwarder === forwarder && unitIsLM(r.unit))
-    .filter(r => Number.isFinite(r.from) && Number.isFinite(r.to))
-    .filter(r => lm >= r.from && lm <= r.to);
-
-  if(rows.length === 0) return {base:null, reason:"Kein Tarif für LM-Bereich"};
-
-  // choose the tightest match (smallest 'to')
-  rows.sort((a,b) => (a.to - b.to) || (a.from - b.from));
-  const r = rows[0];
-  const base = r.pricesByZone?.[zone];
-  if(!Number.isFinite(base)) return {base:null, reason:`Kein Preis für Zone ${zone}`};
-  return {base, reason:null};
-}
-
-function renderTable(results){
-  tbody.innerHTML = "";
-  if(results.length === 0){
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="7" class="muted">Keine Ergebnisse.</td>`;
+function renderSkeleton(){
+  tbody.innerHTML="";
+  if(!FORWARDERS.length){
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td colspan="7" class="muted">Noch keine Daten geladen.</td>`;
     tbody.appendChild(tr);
     return;
   }
-
-  // highlight cheapest
-  let bestIdx = -1;
-  let bestPrice = Infinity;
-  results.forEach((r,i)=>{
-    if(Number.isFinite(r.price) && r.price < bestPrice){
-      bestPrice = r.price;
-      bestIdx = i;
-    }
-  });
-
-  results.forEach((r,i)=>{
-    const tr = document.createElement("tr");
-    if(i===bestIdx) tr.classList.add("best");
-    tr.innerHTML = `
-      <td>${r.forwarder}</td>
-      <td>${r.zone ?? "—"}</td>
-      <td class="right">${Number.isFinite(r.base) ? money(r.base) : "—"}</td>
-      <td class="right">${Number.isFinite(r.floaterPct) ? (r.floaterPct.toLocaleString("de-DE",{minimumFractionDigits:2, maximumFractionDigits:2})+"%") : "—"}</td>
-      <td class="right">${Number.isFinite(r.floaterEur) ? money(r.floaterEur) : "—"}</td>
-      <td class="right">${Number.isFinite(r.price) ? money(r.price) : "—"}</td>
-      <td>${r.reason ? `<span class="muted">${r.reason}</span>` : ""}</td>
-    `;
+  for(const fwd of FORWARDERS){
+    const tr=document.createElement("tr");
+    tr.dataset.forwarder=fwd;
+    tr.innerHTML=`
+      <td>${fwd}</td>
+      <td class="muted">—</td>
+      <td class="right muted">—</td>
+      <td class="right muted">—</td>
+      <td class="right muted">—</td>
+      <td class="right muted">—</td>
+      <td class="reason muted">—</td>`;
     tbody.appendChild(tr);
-  });
-
-  return (bestIdx >= 0) ? results[bestIdx] : null;
-}
-
-async function ensureLoaded(){
-  hideBox(statusBox);
-  hideBox(summaryBox);
-  hideBox(dataInfo);
-
-  await Promise.all([loadZones(), loadRates(), loadFloaters()]);
-
-  const forwarders = unique([
-    ...ZONES.map(z=>z.forwarder),
-    ...RATES.map(r=>r.forwarder),
-    ...Object.keys(FLOATERS)
-  ]).sort((a,b)=>a.localeCompare(b,"de"));
-
-  showBox(dataInfo, "warn", `Daten geladen: <b>${forwarders.length}</b> Spediteure aus <b>zones.csv</b> / <b>rates.csv</b>. Floater aus <b>floater.json</b>.`);
-  return forwarders;
-}
-
-async function calculate(){
-  try{
-    const forwarders = await ensureLoaded();
-
-    const plz = String(plzEl.value||"").trim();
-    if(!plzValid(plz)){
-      showBox(statusBox, "bad", "PLZ muss genau <b>5-stellig</b> sein.");
-      tbody.innerHTML = `<tr><td colspan="7" class="muted">Bitte gültige PLZ eingeben.</td></tr>`;
-      return;
-    }
-
-    const pal = Number(palEl.value);
-    if(!Number.isFinite(pal) || pal < 0){
-      showBox(statusBox, "bad", "Paletten muss eine gültige Zahl (≥ 0) sein.");
-      return;
-    }
-
-    const {lm, mode} = computeLm();
-    if(!Number.isFinite(lm) || lm <= 0){
-      showBox(statusBox, "bad", "Lademeter (LM) muss > 0 sein.");
-      return;
-    }
-    if(lm > MAX_LM){
-      showBox(statusBox, "bad", `Lademeter (LM) darf maximal <b>${MAX_LM}</b> sein.`);
-      return;
-    }
-
-    const results = forwarders.map(f => {
-      const zone = findZoneFor(plz, f);
-      if(zone == null) return {forwarder:f, zone:null, base:null, floaterPct: FLOATERS[f] ?? 0, floaterEur:null, price:null, reason:"Keine Zone für PLZ"};
-
-      const {base, reason} = findBasePrice(f, zone, lm);
-      if(!Number.isFinite(base)) return {forwarder:f, zone, base:null, floaterPct: FLOATERS[f] ?? 0, floaterEur:null, price:null, reason: reason || "Kein Tarif"};
-
-      const floaterPct = Number(FLOATERS[f] ?? 0);
-      const floaterEur = base * (floaterPct/100);
-      const price = base + floaterEur;
-
-      return {forwarder:f, zone, base, floaterPct, floaterEur, price, reason:null};
-    });
-
-    const best = renderTable(results);
-
-    // Summary field (same box; not at top)
-    const lmPal = DEFAULT_LM_PER_PAL;
-    const bestText = best && Number.isFinite(best.price)
-      ? `Günstigster Anbieter: <b>${best.forwarder}</b> (${money(best.price)} €)`
-      : `Günstigster Anbieter: —`;
-
-    summaryKv.innerHTML = `
-      <div><b>PLZ:</b> ${plz}</div>
-      <div><b>Paletten:</b> ${pal}</div>
-      <div><b>Lademeter:</b> ${lm.toLocaleString("de-DE",{maximumFractionDigits:2})} <span class="pill">${mode==="auto"?"auto":"manuell"}</span></div>
-      <div><b>LM/Palette:</b> ${lmPal.toLocaleString("de-DE",{maximumFractionDigits:2})}</div>
-      <div style="flex-basis:100%;margin-top:6px">${bestText}</div>
-    `;
-    summaryBox.style.display="block";
-
-  }catch(e){
-    showBox(statusBox, "bad", `Fehler: ${e.message}`);
-    console.error(e);
   }
 }
 
-function resetAll(){
-  plzEl.value="";
-  palEl.value="";
-  lmEl.value="";
-  hideBox(statusBox);
-  hideBox(summaryBox);
-  tbody.innerHTML = `<tr><td colspan="7" class="muted">Noch keine Berechnung.</td></tr>`;
+function setRow(fwd, zone, base, fpct, feur, total, reason){
+  const tr=tbody.querySelector(`tr[data-forwarder="${CSS.escape(fwd)}"]`);
+  if(!tr) return;
+  const tds=tr.querySelectorAll("td");
+  tds[1].textContent = zone ?? "—";
+  tds[2].textContent = base==null ? "—" : money(base);
+  tds[3].textContent = fpct==null ? "—" : fpct.toFixed(2).replace(".",",")+"%";
+  tds[4].textContent = feur==null ? "—" : money(feur);
+  tds[5].textContent = total==null ? "—" : money(total);
+  tds[6].textContent = reason || "";
+  tr.classList.remove("highlight-row");
 }
 
-function onPalettenChange(){
-  const {lm, mode} = computeLm();
-  if(mode==="auto"){
-    lmEl.value = (Number.isFinite(lm) ? lm.toLocaleString("de-DE",{maximumFractionDigits:2}) : "");
-  }
+function highlightCheapest(best){
+  tbody.querySelectorAll("tr").forEach(tr=>tr.classList.remove("highlight-row"));
+  if(!best) return;
+  const tr=tbody.querySelector(`tr[data-forwarder="${CSS.escape(best.forwarder)}"]`);
+  if(tr) tr.classList.add("highlight-row");
 }
-palEl.addEventListener("input", () => {
-  // only auto-update if lm not manually set
-  const lmStr = String(lmEl.value||"").trim();
-  if(lmStr==="" || lmStr.toLowerCase().includes("auto")) onPalettenChange();
-  else {
-    // if user typed manual LM, do not override
-    lmHint.textContent = "LM manuell überschrieben";
+
+function findZone(fwd, plzStr){
+  const plzNum=parseInt(plzStr,10);
+  if(!Number.isFinite(plzNum)) return null;
+  const matches=ZONES.filter(z=>z.forwarder===fwd && z.from<=plzNum && plzNum<=z.to);
+  if(!matches.length) return null;
+  matches.sort((a,b)=>(a.to-a.from)-(b.to-b.from));
+  return matches[0].zone;
+}
+
+function unitIsLM(unit){
+  const u=String(unit||"").toLowerCase();
+  if(!u) return true; // if no unit column → assume LM tariffs
+  return u.includes("lm") || u.includes("lademeter") || u.includes("ldm") || u.includes("ldm") || u.includes("lm/pal") || u.includes("ldm/pal");
+}
+
+function findRateRow(fwd,lm){
+  const matches=RATES.filter(r=>r.forwarder===fwd && unitIsLM(r.unit) && r.from<=lm && lm<=r.to);
+  if(!matches.length) return null;
+  matches.sort((a,b)=>(a.to-a.from)-(b.to-b.from));
+  return matches[0];
+}
+
+// ===== Main calculate =====
+calcBtn.addEventListener("click", async ()=>{
+  if(!validate()) return;
+  const plzVal=plz.value.trim();
+  const p=toNumInput(pallets);
+  const lm=toNumInput(lademeter);
+
+  if(!FORWARDERS.length){ renderSkeleton(); return; }
+
+  let best=null;
+
+  for(const fwd of FORWARDERS){
+    const zone=findZone(fwd,plzVal);
+    if(zone==null){ setRow(fwd,null,null,Number(FLOATERS[fwd]||0),null,null,"Zone nicht gefunden"); continue; }
+
+    const rr=findRateRow(fwd,lm);
+    if(!rr){ setRow(fwd,zone,null,Number(FLOATERS[fwd]||0),null,null,"Kein LM-Band"); continue; }
+
+    const base=rr.zonePrices.get(zone);
+    if(!Number.isFinite(base)){ setRow(fwd,zone,null,Number(FLOATERS[fwd]||0),null,null,"Kein Preis für Zone"); continue; }
+
+    const fpct = Number(FLOATERS[fwd] ?? 0);
+    const feur=round2(base*(fpct/100));
+    const total=round2(base+feur);
+
+    setRow(fwd,zone,base,fpct,feur,total,"");
+    if(Number.isFinite(total) && (best==null || total<best.total)) best={forwarder:fwd,total};
   }
+
+  highlightCheapest(best);
+  summary.style.display="block";
+  summary.innerHTML = `
+    <div>PLZ: <b>${plzVal}</b></div>
+    <div>Paletten: <b>${p}</b></div>
+    <div>LM/Palette: <b>${lmPerPallet.toFixed(1).replace(".",",")}</b></div>
+    <div>Lademeter: <b>${lm}</b> ${lmManuallyOverridden?'<span class="badge">manuell</span>':'<span class="badge">auto</span>'}</div>
+    <div style="margin-top:.5rem;">Günstigster Anbieter: <b>${best?best.forwarder:"—"}</b> (${best?money(best.total):"—"} €)</div>
+  `;
 });
 
-$("btnCalc").addEventListener("click", calculate);
-$("btnReset").addEventListener("click", resetAll);
-
-// Initialize: make LM auto placeholder
-lmEl.value = "";
-lmEl.placeholder = "auto aus Paletten";
+// ===== Init =====
+async function init(){
+  try {
+    await Promise.all([loadZones(), loadRates(), loadFloaters()]);
+    FORWARDERS = uniq([...ZONES.map(z=>z.forwarder), ...RATES.map(r=>r.forwarder)]);
+    showDataNotice(`Daten geladen: <b>${FORWARDERS.length}</b> Spediteure aus zones.csv / rates.csv. Floater aus floater.json.`);
+    renderSkeleton();
+  } catch (err) {
+    showDataNotice(`Fehler beim Laden der CSV-Dateien.<br><span class="muted">${String(err.message||err)}</span>`, true);
+    FORWARDERS=[];
+    renderSkeleton();
+  }
+  updateMode();
+  validate();
+}
+init();
 </script>
 </body>
 </html>
