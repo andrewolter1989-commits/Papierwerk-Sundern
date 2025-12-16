@@ -1,7 +1,192 @@
 <!DOCTYPE html>
 <html lang="de">
-<head><meta charset="UTF-8"><title>Floater Editor</title></head>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dieselfloater – Papierwerk Sundern</title>
+  <style>
+    :root{--blue:#0b5ea8;--bg:#f5f7fa;--border:#dfe6ee;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);margin:0;color:#1f2937}
+    .wrap{max-width:1100px;margin:22px auto;padding:0 16px}
+    h1{margin:0 0 10px;color:var(--blue)}
+    .card{background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.05);padding:16px}
+    table{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-top:12px}
+    thead th{background:var(--blue);color:#fff;padding:10px;text-align:left;font-size:13px}
+    tbody td{padding:10px;border-top:1px solid var(--border);font-size:14px}
+    tbody tr:nth-child(even){background:#f8fbff}
+    input{padding:8px 10px;border:1px solid var(--border);border-radius:8px;width:120px}
+    .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+    button{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}
+    button.secondary{background:#fff;color:#1f2937;border:1px solid var(--border);font-weight:600}
+    .msg{margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid #ffe69c;background:#fff3cd}
+    code{background:#f0f3f7;padding:2px 6px;border-radius:6px}
+  </style>
+</head>
 <body>
-<h2>Dieselfloater Editor</h2>
-<p>Änderungen erfolgen über Commit von floater.json</p>
-</body></html>
+  <div class="wrap">
+    <h1>Dieselfloater – Papierwerk Sundern</h1>
+
+    <div class="card">
+      <div class="msg">
+        Diese Seite erzeugt eine neue <code>floater.json</code> als Download. Danach im GitHub-Repo ersetzen und committen.
+      </div>
+
+      <div class="actions">
+        <button id="btnReload">Neu laden</button>
+        <button class="secondary" id="btnDownload">floater.json herunterladen</button>
+        <span id="info" style="color:#6b7684"></span>
+      </div>
+
+      <table>
+        <thead>
+          <tr><th>Spediteur</th><th>Floater (%)</th></tr>
+        </thead>
+        <tbody id="tb"><tr><td colspan="2">Lade…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+const tb = document.getElementById("tb");
+const info = document.getElementById("info");
+
+function normHeader(s){
+  return String(s||"").replace(/^\uFEFF/,'').trim().toLowerCase();
+}
+function parseCsv(text){
+  const sample = text.split(/\r?\n/).slice(0,5).join("\n");
+  const semis = (sample.match(/;/g)||[]).length;
+  const commas = (sample.match(/,/g)||[]).length;
+  const delim = semis >= commas ? ";" : ",";
+
+  const rows = [];
+  let row = [];
+  let cur = "";
+  let inQ = false;
+  for(let i=0;i<text.length;i++){
+    const ch = text[i];
+    if(ch === '"'){
+      if(inQ && text[i+1] === '"'){ cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if(!inQ && ch === delim){
+      row.push(cur); cur="";
+    } else if(!inQ && (ch === "\n" || ch === "\r")){
+      if(ch === "\r" && text[i+1] === "\n") i++;
+      row.push(cur); cur="";
+      if(row.some(c => String(c).trim() !== "")) rows.push(row);
+      row = [];
+    } else {
+      cur += ch;
+    }
+  }
+  row.push(cur);
+  if(row.some(c => String(c).trim() !== "")) rows.push(row);
+  return rows;
+}
+
+async function fetchText(url){
+  const r = await fetch(url, {cache:"no-store"});
+  if(!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  return await r.text();
+}
+async function fetchJson(url){
+  const r = await fetch(url, {cache:"no-store"});
+  if(!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  return await r.json();
+}
+
+function findHeaderRow(rows, required){
+  for(let i=0;i<Math.min(rows.length, 20); i++){
+    const h = rows[i].map(normHeader);
+    const ok = required.every(k => h.includes(k));
+    if(ok) return {i, h};
+  }
+  return null;
+}
+
+let floaters = {};
+
+async function loadForwarders(){
+  // build forwarder list from zones + rates so editor stays in sync
+  const zText = await fetchText("zones.csv");
+  const rText = await fetchText("rates.csv");
+  const zRows = parseCsv(zText);
+  const rRows = parseCsv(rText);
+
+  const zHdr = findHeaderRow(zRows, ["forwarder","dest from","dest to","zone"]);
+  const rHdr = findHeaderRow(rRows, ["forwarder","unit"]);
+
+  const set = new Set();
+
+  if(zHdr){
+    const idx = zHdr.h.indexOf("forwarder");
+    for(let i=zHdr.i+1;i<zRows.length;i++){
+      const f = (zRows[i][idx]||"").trim();
+      if(f) set.add(f);
+    }
+  }
+  if(rHdr){
+    const idx = rHdr.h.indexOf("forwarder");
+    for(let i=rHdr.i+1;i<rRows.length;i++){
+      const f = (rRows[i][idx]||"").trim();
+      if(f) set.add(f);
+    }
+  }
+  return Array.from(set).sort((a,b)=>a.localeCompare(b,"de"));
+}
+
+function render(forwarders){
+  tb.innerHTML = "";
+  for(const f of forwarders){
+    const pct = (floaters[f] ?? 0);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${f}</td>
+      <td><input inputmode="decimal" value="${String(pct).replace(".",",")}" data-f="${f}" /></td>
+    `;
+    tb.appendChild(tr);
+  }
+
+  // wire change
+  tb.querySelectorAll("input[data-f]").forEach(inp=>{
+    inp.addEventListener("input", () => {
+      const f = inp.getAttribute("data-f");
+      const v = String(inp.value||"").trim().replace(/\./g,'').replace(/,/g,'.');
+      const n = Number(v);
+      floaters[f] = Number.isFinite(n) ? n : 0;
+    });
+  });
+}
+
+function downloadJson(){
+  const blob = new Blob([JSON.stringify(floaters, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "floater.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
+
+async function reload(){
+  try{
+    info.textContent = "Lade…";
+    floaters = {};
+    try{ floaters = await fetchJson("floater.json"); }catch(e){ floaters = {}; }
+    const forwarders = await loadForwarders();
+    render(forwarders);
+    info.textContent = `Spediteure: ${forwarders.length}`;
+  }catch(e){
+    tb.innerHTML = `<tr><td colspan="2" style="color:#b00020">Fehler: ${e.message}</td></tr>`;
+    info.textContent = "";
+    console.error(e);
+  }
+}
+
+document.getElementById("btnReload").addEventListener("click", reload);
+document.getElementById("btnDownload").addEventListener("click", downloadJson);
+reload();
+</script>
+</body>
+</html>
