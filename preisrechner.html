@@ -482,8 +482,12 @@ function findZone(fwd, plzStr){
 }
 
 function unitIsLM(unit){
-  const u=String(unit||"").toLowerCase();
+  // rates.csv nutzt bei diesem Kunden "SHP" als Einheit für diese Tarife.
+  // Wir akzeptieren daher LM/LD(M)/Lademeter und zusätzlich SHP (case-insensitive).
+  const u = String(unit||"").toLowerCase().trim();
   if(!u) return true;
+  if(u === "shp" || u === "ship") return true;
+  if(u === "minimum") return false; // Mindestfracht-Zeilen nicht als LM-Band verwenden
   return u.includes("lm") || u.includes("lademeter") || u.includes("ldm");
 }
 
