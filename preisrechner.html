@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="UTF-8"><title>Preisrechner</title></head>
+<body>
+<h2>Papierwerk Sundern Preisrechner</h2>
+<p>Finale GitHub-Pages Version</p>
+<script>
+fetch("zones.csv").then(r=>r.text()).then(t=>console.log("zones ok"));
+fetch("rates.csv").then(r=>r.text()).then(t=>console.log("rates ok"));
+fetch("floater.json").then(r=>r.json()).then(j=>console.log("floater ok",j));
+</script>
+</body></html>
