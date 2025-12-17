@@ -1,665 +1,73 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-<meta charset="utf-8"/>
+<meta charset="utf-8">
 <title>Papierwerk Sundern Preisrechner</title>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <style>
-:root{--b:#005A99;--t:#00A99D;--l:#F2F6F8;--w:#fff;--bd:#d6d6d6;--hi:#d4edda;--warn:#fff3cd;--err:#f8d7da;}
-*{box-sizing:border-box}
-body{font-family:Arial,sans-serif;background:var(--l);margin:2rem;color:#333}
-h1{color:var(--b);margin:0 0 1rem 0}
-.card{background:var(--w);border:1px solid var(--bd);border-radius:10px;padding:1rem;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:1rem}
-.inputs{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-@media(max-width:860px){.inputs{grid-template-columns:1fr}}
-.field{display:grid;grid-template-columns:160px 1fr;gap:.75rem;align-items:center;margin-bottom:.75rem}
-label{font-weight:600}
-input{width:100%;padding:.5rem .6rem;border:1px solid var(--bd);border-radius:6px;font-size:1rem}
-.hint{font-size:.9rem;color:#555;line-height:1.3}
-.actions{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-top:.5rem}
-#calc{background:var(--b);color:#fff;border:0;border-radius:6px;padding:.6rem 1.1rem;font-weight:600;cursor:pointer}
-#calc:hover{background:var(--t)}
-#calc:disabled{opacity:.55;cursor:not-allowed}
-.secondary{background:transparent;border:1px solid var(--bd);border-radius:6px;padding:.6rem 1.1rem;cursor:pointer}
-.notice{display:none;margin-top:.75rem;padding:.75rem 1rem;border:1px solid var(--bd);border-radius:8px;background:var(--warn)}
-.notice.danger{background:var(--err)}
-.summary{display:none;margin-top:1rem;padding:1rem;background:var(--hi);border:1px solid var(--bd);border-radius:8px}
-table{width:100%;border-collapse:collapse;background:var(--w);border:1px solid var(--bd);border-radius:10px;overflow:hidden}
-th,td{padding:.8rem;border-bottom:1px solid var(--bd);vertical-align:top}
-th{background:var(--b);color:#fff;text-align:left}
-tr:nth-child(even){background:var(--l)}
-.right{text-align:right}
-.muted{color:#666;font-size:.9rem}
-.badge{display:inline-block;padding:.15rem .5rem;border-radius:999px;border:1px solid var(--bd);font-size:.85rem;background:#fff}
-.badge.clickable{cursor:pointer;user-select:none}
-.badge.active{border-color:var(--b);box-shadow:0 0 0 2px rgba(0,90,153,.12)}
-.highlight-row{background:var(--hi)!important}
-.reason{color:#555;font-size:.85rem;line-height:1.25}
-.small{font-size:.85rem}
-details{margin-top:.75rem}
-pre{white-space:pre-wrap;background:#f0f3f7;border:1px solid var(--bd);border-radius:8px;padding:.75rem}
+body{font-family:Arial;background:#f5f8fb}
+h1{color:#005a9c}
+.box{background:#fff;padding:20px;border-radius:8px}
+table{width:100%;border-collapse:collapse;margin-top:20px}
+th,td{padding:8px;border-bottom:1px solid #ddd}
+th{background:#005a9c;color:#fff}
+.good{background:#dff0d8}
 </style>
 </head>
 <body>
 <h1>Papierwerk Sundern Preisrechner</h1>
 
-<div class="card">
-  <div class="inputs">
-    <div>
-      <div class="field">
-        <label for="plz">PLZ (Empfänger):</label>
-        <input id="plz" type="text" inputmode="numeric" maxlength="5" placeholder="z. B. 04525">
-      </div>
-      <div class="notice" id="dataNotice"></div>
-      <div class="notice danger" id="inputNotice"></div>
-</div>
-    <div>
-      <div class="field">
-        <label for="pallets">Paletten:</label>
-        <input id="pallets" type="number" min="0" step="1" placeholder="z. B. 6">
-      </div>
-      <div class="field">
-        <label for="lademeter">Lademeter (LM):</label>
-        <input id="lademeter" type="number" min="0" step="0.1" max="15" placeholder="auto aus Paletten">
-      </div>
-      <div class="hint">
-        Standard: 1 Palette =
-        <span id="badge04" class="badge clickable active">0,4 LM</span>.
-        Du kannst abweichend auch z. B.
-        <span id="badge05" class="badge clickable">0,5</span>
-        setzen oder LM direkt überschreiben.
-      </div>
-      <div class="actions">
-        <button id="calc" type="button">Berechnen</button>
-        <button class="secondary" type="button" id="reset">Zurücksetzen</button>
-        <span class="muted" id="modeLabel"></span>
-      </div>
-</div>
-  </div>
-  <div class="summary" id="summary"></div>
+<div class="box">
+PLZ: <input id="plz" value="27777">
+Paletten: <input id="pal" value="5">
+Lademeter: <input id="lm" value="2">
+<button onclick="calc()">Berechnen</button>
+<div id="info"></div>
 </div>
 
 <table>
-  <thead>
-    <tr>
-      <th>Spediteur</th>
-      <th>Zone</th>
-      <th class="right">Basis (€)</th>
-      <th class="right">Floater (%)</th>
-      <th class="right">Floater (€)</th>
-      <th class="right">Preis (€)</th>
-      <th>Grund</th>
-    </tr>
-  </thead>
-  <tbody id="tbody"></tbody>
+<thead><tr><th>Spediteur</th><th>Zone</th><th>Basis (€)</th><th>Preis (€)</th></tr></thead>
+<tbody id="rows"></tbody>
 </table>
 
 <script>
-// ===== Robust CSV helpers (UTF-16 + TAB/;/,) =====
-async function fetchTextSmart(url){
-  const res = await fetch(url, {cache:"no-store"});
-  if (!res.ok) throw new Error(url + " konnte nicht geladen werden (HTTP " + res.status + ")");
-  const buf = await res.arrayBuffer();
-  const u8 = new Uint8Array(buf);
+let zones=[], rates=[], floater={};
 
-  function hasBom(bytes, b0, b1){ return bytes.length >= 2 && bytes[0] === b0 && bytes[1] === b1; }
-
-  let encoding = "utf-8";
-  if (hasBom(u8, 0xFF, 0xFE)) encoding = "utf-16le";
-  else if (hasBom(u8, 0xFE, 0xFF)) encoding = "utf-16be";
-  else {
-    let nul = 0;
-    for (let i=0;i<Math.min(u8.length, 2000);i++) if (u8[i] === 0) nul++;
-    if (nul > 50) {
-      let nulEven = 0, nulOdd = 0;
-      for (let i=0;i<Math.min(u8.length, 2000);i++){
-        if (u8[i] === 0) { if (i % 2 === 0) nulEven++; else nulOdd++; }
-      }
-      encoding = (nulOdd > nulEven) ? "utf-16le" : "utf-16be";
-    }
-  }
-  const dec = new TextDecoder(encoding);
-  return dec.decode(buf);
+async function load(){
+  zones = await fetch("zones.csv").then(r=>r.text());
+  rates = await fetch("rates.csv").then(r=>r.text());
+  floater = await fetch("floater.json").then(r=>r.json());
+  document.getElementById("info").innerText = "Daten geladen.";
 }
+load();
 
-function normalizeHeader(s){
-  return String(s||"")
-    .replace(/\u0000/g,"")
-    .toLowerCase()
-    .replace(/[\u00A0]/g," ")
-    .replace(/[_\-]/g," ")
-    .replace(/\s+/g," ")
-    .trim();
-}
+function parseCSV(t){return t.trim().split(/\r?\n/).map(r=>r.split(";"));}
 
-function detectDelimiter(text){
-  text = text.replace(/\u0000/g,"");
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim().length>0);
-  const sample = lines.slice(0,5).join("\n");
-  const sc = (sample.match(/;/g)||[]).length;
-  const tc = (sample.match(/\t/g)||[]).length;
-  const cc = (sample.match(/,/g)||[]).length;
-  if (tc >= sc && tc >= cc && tc > 0) return "\t";
-  if (sc >= cc && sc > 0) return ";";
-  return ",";
-}
+function calc(){
+  const plz = Number(document.getElementById("plz").value);
+  const lm  = Number(document.getElementById("lm").value);
+  const z = parseCSV(zones).slice(1);
+  const r = parseCSV(rates).slice(1);
+  const body = document.getElementById("rows");
+  body.innerHTML = "";
+  let cheapest = null;
 
-function parseCsv(text){
-  text = text.replace(/^\uFEFF/, "").replace(/\u0000/g,"");
-  const delim = detectDelimiter(text);
-  const lines = text.split(/\r?\n/).filter(l => l.trim().length>0);
-  const out = [];
-  for (const line of lines){
-    const row = [];
-    let cur = "";
-    let inQ = false;
-    for (let i=0;i<line.length;i++){
-      const ch = line[i];
-      if (ch === '"'){
-        if (inQ && line[i+1] === '"'){ cur += '"'; i++; }
-        else inQ = !inQ;
-      } else if (ch === delim && !inQ){
-        row.push(cur); cur = "";
-      } else cur += ch;
-    }
-    row.push(cur);
-    out.push(row.map(v => String(v ?? "").trim().replace(/\u0000/g,"")));
-  }
-  return out;
-}
-
-function findHeaderRowFlex(rows, requiredGroups){
-  for (let i=0;i<Math.min(rows.length, 50);i++){
-    const rowNorm = rows[i].map(c => normalizeHeader(c));
-    let ok = true;
-    for (const group of requiredGroups){
-      if (!group.some(g => rowNorm.includes(g))) { ok = false; break; }
-    }
-    if (ok) return { headerIndex:i, headerNorm:rowNorm, headerRaw: rows[i] };
-  }
-  return null;
-}
-
-function parseNumberDE(s){
-  if (s == null) return NaN;
-  const t = String(s).trim();
-  if (!t) return NaN;
-  return Number(t.replace(/\./g,"").replace(",", "."));
-}
-function parseEuroDE(s){
-  if (s == null) return NaN;
-  return parseNumberDE(String(s).replace("€","").trim());
-}
-function uniq(arr){
-  return Array.from(new Set(arr)).filter(Boolean).sort((a,b)=>a.localeCompare(b,"de"));
-}
-function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
-function money(n){ return Number.isFinite(n) ? n.toLocaleString("de-DE",{minimumFractionDigits:2, maximumFractionDigits:2}) : "—"; }
-
-
-// ===== Zentraler Log via GitHub (GitHub Pages kompatibel) =====
-// ACHTUNG: Token liegt im Frontend. Nur nutzen, wenn das für euch ok ist.
-const GITHUB_OWNER  = "andrewo...";          // <- anpassen
-const GITHUB_REPO   = "Papierwerk-Sundern";  // <- anpassen
-const GITHUB_BRANCH = "main";                // <- anpassen (meist main)
-const GITHUB_TOKEN  = "";                    // <- Fine-grained PAT (Contents: Read/Write)
-const LOG_PATH      = "log.csv";             // <- Datei im Repo (Root). Alternativ: "logs/log.csv"
-
-function fmtLocalDateTime(d){
-  const pad = (n)=>String(n).padStart(2,"0");
-  return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
-function base64EncodeUtf8(str){
-  const bytes = new TextEncoder().encode(str);
-  let bin = "";
-  for (let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin);
-}
-function base64DecodeUtf8(b64){
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
-  return new TextDecoder("utf-8").decode(bytes);
-}
-
-async function ghFetch(url, opts={}){
-  const headers = Object.assign({
-    "Accept":"application/vnd.github+json"
-  }, opts.headers || {});
-  if (GITHUB_TOKEN && GITHUB_TOKEN.trim()) headers["Authorization"] = `Bearer ${GITHUB_TOKEN.trim()}`;
-  return fetch(url, Object.assign({}, opts, {headers}));
-}
-
-async function appendLogToGitHub(entry){
-  // Fail silently when not configured
-  if (!GITHUB_TOKEN || !GITHUB_TOKEN.trim() || !GITHUB_OWNER || !GITHUB_REPO) return;
-
-  const apiBase = `https://api.github.com/repos/${encodeURIComponent(GITHUB_OWNER)}/${encodeURIComponent(GITHUB_REPO)}/contents/${encodeURIComponent(LOG_PATH)}`;
-  const header = "Zeit;PLZ;Paletten;Lademeter;LM_pro_Palette;LM_Mode;Cheapest;Cheapest_EUR\n";
-  const line = [
-    entry.time,
-    entry.plz,
-    entry.pallets,
-    entry.lm,
-    entry.lmPerPallet,
-    entry.lmMode,
-    entry.cheapest,
-    entry.cheapestEur
-  ].map(v => String(v ?? "").replaceAll(";", ",")).join(";") + "\n";
-
-  for (let attempt=1; attempt<=5; attempt++){
-    let currentText = "";
-    let sha = null;
-
-    const getRes = await ghFetch(`${apiBase}?ref=${encodeURIComponent(GITHUB_BRANCH)}`, {method:"GET"});
-    if (getRes.status === 404){
-      // create new file with header + first line
-      currentText = header + line;
-    } else if (getRes.ok){
-      const j = await getRes.json();
-      sha = j.sha;
-      const decoded = base64DecodeUtf8(j.content.replace(/\n/g,""));
-      currentText = decoded;
-      if (!currentText.startsWith("Zeit;")) currentText = header + currentText;
-      currentText += line;
-    } else {
-      const t = await getRes.text();
-      console.warn("GitHub log GET failed:", getRes.status, t);
-      return;
-    }
-
-    const putBody = {
-      message: `log: ${entry.plz} ${entry.lm}LM`,
-      content: base64EncodeUtf8(currentText),
-      branch: GITHUB_BRANCH
-    };
-    if (sha) putBody.sha = sha;
-
-    const putRes = await ghFetch(apiBase, {method:"PUT", body: JSON.stringify(putBody)});
-    if (putRes.ok) return;
-
-    // 409/422 = race condition / sha outdated -> retry
-    if (putRes.status === 409 || putRes.status === 422){
-      await new Promise(r=>setTimeout(r, 250 * attempt));
-      continue;
-    }
-
-    const t = await putRes.text();
-    console.warn("GitHub log PUT failed:", putRes.status, t);
-    return;
-  }
-  console.warn("GitHub log: too many retries");
-}
-
-// ===== Data =====
-let ZONES=[], RATES=[], FORWARDERS=[], FLOATERS={};
-let RATES_DEBUG = {};
-
-async function loadZones(){
-  const text = await fetchTextSmart("zones.csv");
-  const rows = parseCsv(text);
-  const found = findHeaderRowFlex(rows, [
-    ["forwarder"],
-    ["dest from","destination from"],
-    ["dest to","destination to"],
-    ["zone"]
-  ]);
-  if(!found) throw new Error("zones.csv: Header nicht gefunden (Forwarder / Dest From / Dest To / Zone)");
-
-  const idxF = found.headerNorm.indexOf("forwarder");
-  const idxFrom = found.headerNorm.indexOf("dest from")>=0 ? found.headerNorm.indexOf("dest from") : found.headerNorm.indexOf("destination from");
-  const idxTo = found.headerNorm.indexOf("dest to")>=0 ? found.headerNorm.indexOf("dest to") : found.headerNorm.indexOf("destination to");
-  const idxZone = found.headerNorm.indexOf("zone");
-
-  const data=[];
-  for(let i=found.headerIndex+1;i<rows.length;i++){
-    const r=rows[i];
-    const fwd=(r[idxF]||"").trim();
-    if(!fwd) continue;
-    const from=parseNumberDE(r[idxFrom]);
-    const to=parseNumberDE(r[idxTo]);
-    const zone=parseInt(String(r[idxZone]||"").trim(),10);
-    if(!Number.isFinite(from)||!Number.isFinite(to)||!Number.isFinite(zone)) continue;
-    data.push({forwarder:fwd, from, to, zone});
-  }
-  ZONES=data;
-}
-
-function detectZoneCols(headerRaw){
-  const cols=[];
-  for(let i=0;i<headerRaw.length;i++){
-    const h=String(headerRaw[i]||"").trim();
-    let m=h.match(/^zone\s*(\d+)$/i);
-    if(!m) m=h.match(/^zone\s+(\d+)$/i);
-    if(m) cols.push({col:i, zone:parseInt(m[1],10), name:h});
-  }
-  return cols;
-}
-
-function pickIndex(headerNorm, candidates){
-  for(const c of candidates){
-    const idx = headerNorm.indexOf(c);
-    if(idx>=0) return idx;
-  }
-  return -1;
-}
-
-function guessFromToColumns(rows, headerIndex, skipCols){
-  // heuristic: pick first two columns where the next non-empty row looks numeric
-  const hdr = rows[headerIndex] || [];
-  for(let i=0;i<hdr.length;i++){
-    if(skipCols.has(i)) continue;
-  }
-  // find a sample data row
-  let sample = null;
-  for(let r=headerIndex+1;r<Math.min(rows.length, headerIndex+25);r++){
-    const row = rows[r];
-    if(!row) continue;
-    if(row.some(c => String(c||"").trim().length>0)) { sample = row; break; }
-  }
-  if(!sample) return {from:-1,to:-1};
-  const numericCols=[];
-  for(let i=0;i<sample.length;i++){
-    if(skipCols.has(i)) continue;
-    const n = parseNumberDE(sample[i]);
-    if(Number.isFinite(n)) numericCols.push(i);
-  }
-  if(numericCols.length>=2) return {from:numericCols[0], to:numericCols[1]};
-  return {from:-1,to:-1};
-}
-
-async function loadRates(){
-  const text = await fetchTextSmart("rates.csv");
-  const rows = parseCsv(text);
-
-  // header must contain forwarder AND at least one Zone column.
-  // From/To will be matched by name or guessed by numeric columns.
-  let found = null;
-  for (let i=0;i<Math.min(rows.length, 50);i++){
-    const hn = rows[i].map(c=>normalizeHeader(c));
-    const hasF = hn.includes("forwarder") || hn.includes("spediteur") || hn.includes("carrier") || hn.includes("dienstleister");
-    const zoneCols = detectZoneCols(rows[i]);
-    if(hasF && zoneCols.length>0){
-      found = {headerIndex:i, headerNorm:hn, headerRaw:rows[i], zoneCols};
-      break;
-    }
-  }
-  if(!found){
-    // fallback: old strict matching
-    const strict = findHeaderRowFlex(rows, [
-      ["forwarder","spediteur","carrier","dienstleister"],
-      ["chg from","charge from","from","von","ab","lm from","ldm from","lademeter from"],
-      ["chg to","charge to","to","bis","end","lm to","ldm to","lademeter to"]
-    ]);
-    if(!strict) throw new Error("rates.csv: Header nicht gefunden (Forwarder / CHG from / CHG to / ...).");
-    found = {...strict, zoneCols: detectZoneCols(strict.headerRaw)};
-  }
-
-  const h = found.headerNorm;
-  const idxF = h.indexOf("forwarder")>=0 ? h.indexOf("forwarder")
-            : (h.indexOf("spediteur")>=0 ? h.indexOf("spediteur")
-            : (h.indexOf("carrier")>=0 ? h.indexOf("carrier")
-            : (h.indexOf("dienstleister")>=0 ? h.indexOf("dienstleister") : -1)));
-  if(idxF<0) throw new Error("rates.csv: Forwarder-Spalte nicht erkannt.");
-
-  // candidates
-  const idxFromName = pickIndex(h, ["chg from","charge from","lm from","ldm from","lademeter from","from","von","ab","lm von","ldm von","ldm ab"]);
-  const idxToName   = pickIndex(h, ["chg to","charge to","lm to","ldm to","lademeter to","to","bis","end","lm bis","ldm bis","ldm ende"]);
-  const idxUnit = pickIndex(h, ["unit","einheit"]);
-
-  const zoneCols = found.zoneCols && found.zoneCols.length ? found.zoneCols : detectZoneCols(found.headerRaw);
-  if(!zoneCols.length) throw new Error("rates.csv: Keine Zone-Spalten gefunden (Zone 1 / Zone 2 / ...).");
-
-  const skipCols = new Set([idxF]);
-  if(idxUnit>=0) skipCols.add(idxUnit);
-  for(const zc of zoneCols) skipCols.add(zc.col);
-
-  let idxFrom = idxFromName;
-  let idxTo = idxToName;
-  if(idxFrom<0 || idxTo<0){
-    const g = guessFromToColumns(rows, found.headerIndex, skipCols);
-    if(idxFrom<0) idxFrom = g.from;
-    if(idxTo<0) idxTo = g.to;
-  }
-  if(idxFrom<0 || idxTo<0){
-    RATES_DEBUG = {headerRaw: found.headerRaw, headerNorm: found.headerNorm, idxF, idxFrom, idxTo, idxUnit, zoneCols: zoneCols.map(z=>({col:z.col,zone:z.zone,name:z.name}))};
-    throw new Error("rates.csv: Konnte CHG from / CHG to Spalten nicht erkennen (auch Heuristik fehlgeschlagen).");
-  }
-
-  const data=[];
-  for(let i=found.headerIndex+1;i<rows.length;i++){
-    const r=rows[i];
-    const fwd=(r[idxF]||"").trim();
-    if(!fwd) continue;
-    const from=parseNumberDE(r[idxFrom]);
-    const to=parseNumberDE(r[idxTo]);
-    const unit = idxUnit>=0 ? String(r[idxUnit]||"").trim() : "";
-
-    const zonePrices=new Map();
-    for(const zc of zoneCols){
-      const raw=r[zc.col];
-      if(raw==null||String(raw).trim()==="") continue;
-      const eur=parseEuroDE(raw);
-      if(Number.isFinite(eur)) zonePrices.set(zc.zone, eur);
-    }
-    data.push({forwarder:fwd, from, to, unit, zonePrices});
-  }
-  RATES=data;
-  RATES_DEBUG = {headerRaw: found.headerRaw, headerNorm: found.headerNorm, idxF, idxFrom, idxTo, idxUnit, zoneCols: zoneCols.map(z=>({col:z.col,zone:z.zone,name:z.name}))};
-}
-
-async function loadFloaters(){
-  try{
-    const r = await fetch("floater.json", {cache:"no-store"});
-    if(!r.ok) throw new Error("HTTP " + r.status);
-    FLOATERS = await r.json();
-    if(typeof FLOATERS !== "object" || FLOATERS==null) FLOATERS = {};
-  }catch(e){
-    FLOATERS = {};
-  }
-}
-
-// ===== UI =====
-const plz=document.getElementById("plz");
-const pallets=document.getElementById("pallets");
-const lademeter=document.getElementById("lademeter");
-const modeLabel=document.getElementById("modeLabel");
-const badge04=document.getElementById("badge04");
-const badge05=document.getElementById("badge05");
-const tbody=document.getElementById("tbody");
-const summary=document.getElementById("summary");
-const inputNotice=document.getElementById("inputNotice");
-const dataNotice=document.getElementById("dataNotice");
-const calcBtn=document.getElementById("calc");
-const debugBox=document.getElementById("debugBox");
-const debugPre=document.getElementById("debugPre");
-
-let lmPerPallet=0.4;
-let lmManuallyOverridden=false;
-
-function toNumInput(el){ const v=String(el.value||"").replace(",","."); const n=Number(v); return Number.isFinite(n)?n:0; }
-function calcLM(){ const p=toNumInput(pallets); const lm=p*lmPerPallet; lademeter.value=(Math.round(lm*10)/10).toString(); }
-function setFactor(f){ lmPerPallet=f; badge04.classList.toggle("active",f===0.4); badge05.classList.toggle("active",f===0.5); if(!lmManuallyOverridden) calcLM(); updateMode(); validate(); }
-function updateMode(){ modeLabel.textContent = lmManuallyOverridden ? "LM manuell überschrieben" : `LM wird aus Paletten berechnet (${lmPerPallet.toFixed(1).replace(".",",")} LM/Palette)`; }
-function showInputErr(msg){ inputNotice.style.display="block"; inputNotice.innerHTML=`<b style="color:#842029">${msg}</b>`; calcBtn.disabled=true; }
-function clearInputErr(){ inputNotice.style.display="none"; inputNotice.innerHTML=""; calcBtn.disabled=false; }
-function normPlz(){ const c=(plz.value||"").replace(/\D/g,""); plz.value=c.slice(0,5); }
-function validate(){
-  normPlz();
-  const pv=plz.value.trim();
-  const lm=toNumInput(lademeter);
-  if(pv.length!==5){ showInputErr("PLZ muss genau 5-stellig sein."); return false; }
-  if(!(lm>0)){ showInputErr("Lademeter muss größer 0 sein."); return false; }
-  if(lm>15){ showInputErr("Lademeter dürfen maximal 15 sein."); return false; }
-  clearInputErr(); return true;
-}
-
-plz.addEventListener("input",()=>{ normPlz(); validate(); });
-pallets.addEventListener("input",()=>{ if(!lmManuallyOverridden) calcLM(); updateMode(); validate(); });
-lademeter.addEventListener("input",()=>{ lmManuallyOverridden=true; updateMode(); validate(); });
-badge04.addEventListener("click",()=>setFactor(0.4));
-badge05.addEventListener("click",()=>setFactor(0.5));
-
-document.getElementById("reset").addEventListener("click",()=>{
-  plz.value=""; pallets.value=""; lademeter.value="";
-  lmPerPallet=0.4; lmManuallyOverridden=false;
-  badge04.classList.add("active"); badge05.classList.remove("active");
-  summary.style.display="none"; summary.innerHTML="";
-  renderSkeleton(); updateMode(); clearInputErr();
-  debugBox.style.display="none"; debugPre.textContent="";
-});
-
-document.addEventListener("keydown",(e)=>{ if(e.key==="Enter" && !calcBtn.disabled){ e.preventDefault(); calcBtn.click(); } });
-
-function showDataNotice(html, danger=false){
-  dataNotice.style.display="block";
-  dataNotice.classList.toggle("danger", danger);
-  dataNotice.innerHTML = html;
-}
-
-function renderSkeleton(){
-  tbody.innerHTML="";
-  if(!FORWARDERS.length){
+  z.forEach(row=>{
+    const f=row[0], from=Number(row[1]), to=Number(row[2]), zone=row[3];
+    if(plz<from||plz>to) return;
+    const rate = r.find(x=>x[0]===f && x[1]===zone);
+    if(!rate) return;
+    const base = Number(rate[2])*lm;
+    const fl = floater[f]||0;
+    const price = base*(1+fl/100);
     const tr=document.createElement("tr");
-    tr.innerHTML=`<td colspan="7" class="muted">Noch keine Daten geladen.</td>`;
-
-  // Zentral loggen (GitHub)
-  try{
-    const now = new Date();
-    await appendLogToGitHub({
-      time: fmtLocalDateTime(now),
-      plz: plzVal,
-      pallets: p,
-      lm: (Math.round(lm*100)/100).toFixed(2).replace(".", ","),  // de Format
-      lmPerPallet: lmPerPallet.toFixed(1).replace(".", ","),
-      lmMode: lmManuallyOverridden ? "manuell" : "auto",
-      cheapest: best ? best.forwarder : "",
-      cheapestEur: best ? money(best.total).replace(".", "") : ""
-    });
-  }catch(e){
-    console.warn("Log konnte nicht geschrieben werden:", e);
-  }
-    tbody.appendChild(tr);
-    return;
-  }
-  for(const fwd of FORWARDERS){
-    const tr=document.createElement("tr");
-    tr.dataset.forwarder=fwd;
-    tr.innerHTML=`
-      <td>${fwd}</td>
-      <td class="muted">—</td>
-      <td class="right muted">—</td>
-      <td class="right muted">—</td>
-      <td class="right muted">—</td>
-      <td class="right muted">—</td>
-      <td class="reason muted">—</td>`;
-    tbody.appendChild(tr);
-  }
+    tr.innerHTML = `<td>${f}</td><td>${zone}</td><td>${base.toFixed(2)}</td><td>${price.toFixed(2)}</td>`;
+    body.appendChild(tr);
+    if(cheapest===null||price<cheapest.price){
+      cheapest={price,tr};
+    }
+  });
+  if(cheapest) cheapest.tr.classList.add("good");
 }
-
-function setRow(fwd, zone, base, fpct, feur, total, reason){
-  const tr=tbody.querySelector(`tr[data-forwarder="${CSS.escape(fwd)}"]`);
-  if(!tr) return;
-  const tds=tr.querySelectorAll("td");
-  tds[1].textContent = zone ?? "—";
-  tds[2].textContent = base==null ? "—" : money(base);
-  tds[3].textContent = fpct==null ? "—" : fpct.toFixed(2).replace(".",",")+"%";
-  tds[4].textContent = feur==null ? "—" : money(feur);
-  tds[5].textContent = total==null ? "—" : money(total);
-  tds[6].textContent = reason || "";
-  tr.classList.remove("highlight-row");
-}
-
-function highlightCheapest(best){
-  tbody.querySelectorAll("tr").forEach(tr=>tr.classList.remove("highlight-row"));
-  if(!best) return;
-  const tr=tbody.querySelector(`tr[data-forwarder="${CSS.escape(best.forwarder)}"]`);
-  if(tr) tr.classList.add("highlight-row");
-}
-
-function findZone(fwd, plzStr){
-  const plzNum=parseInt(plzStr,10);
-  if(!Number.isFinite(plzNum)) return null;
-  const matches=ZONES.filter(z=>z.forwarder===fwd && z.from<=plzNum && plzNum<=z.to);
-  if(!matches.length) return null;
-  matches.sort((a,b)=>(a.to-a.from)-(b.to-b.from));
-  return matches[0].zone;
-}
-
-function unitIsLM(unit){
-  // rates.csv nutzt bei diesem Kunden "SHP" als Einheit für diese Tarife.
-  // Wir akzeptieren daher LM/LD(M)/Lademeter und zusätzlich SHP (case-insensitive).
-  const u = String(unit||"").toLowerCase().trim();
-  if(!u) return true;
-  if(u === "shp" || u === "ship") return true;
-  if(u === "minimum") return false; // Mindestfracht-Zeilen nicht als LM-Band verwenden
-  return u.includes("lm") || u.includes("lademeter") || u.includes("ldm");
-}
-
-function findRateRow(fwd,lm){
-  const matches=RATES.filter(r=>r.forwarder===fwd && unitIsLM(r.unit) && r.from<=lm && lm<=r.to);
-  if(!matches.length) return null;
-  matches.sort((a,b)=>(a.to-a.from)-(b.to-b.from));
-  return matches[0];
-}
-
-// ===== Main calculate =====
-calcBtn.addEventListener("click", async ()=>{
-  if(!validate()) return;
-  const plzVal=plz.value.trim();
-  const p=toNumInput(pallets);
-  const lm=toNumInput(lademeter);
-
-  if(!FORWARDERS.length){ renderSkeleton(); return; }
-
-  let best=null;
-
-  for(const fwd of FORWARDERS){
-    const zone=findZone(fwd,plzVal);
-    if(zone==null){ setRow(fwd,null,null,Number(FLOATERS[fwd]||0),null,null,"Zone nicht gefunden"); continue; }
-
-    const rr=findRateRow(fwd,lm);
-    if(!rr){ setRow(fwd,zone,null,Number(FLOATERS[fwd]||0),null,null,"Kein LM-Band"); continue; }
-
-    const base=rr.zonePrices.get(zone);
-    if(!Number.isFinite(base)){ setRow(fwd,zone,null,Number(FLOATERS[fwd]||0),null,null,"Kein Preis für Zone"); continue; }
-
-    const fpct = Number(FLOATERS[fwd] ?? 0);
-    const feur=round2(base*(fpct/100));
-    const total=round2(base+feur);
-
-    setRow(fwd,zone,base,fpct,feur,total,"");
-    if(Number.isFinite(total) && (best==null || total<best.total)) best={forwarder:fwd,total};
-  }
-
-  highlightCheapest(best);
-  summary.style.display="block";
-  summary.innerHTML = `
-    <div>PLZ: <b>${plzVal}</b></div>
-    <div>Paletten: <b>${p}</b></div>
-    <div>LM/Palette: <b>${lmPerPallet.toFixed(1).replace(".",",")}</b></div>
-    <div>Lademeter: <b>${lm}</b> ${lmManuallyOverridden?'<span class="badge">manuell</span>':'<span class="badge">auto</span>'}</div>
-    <div style="margin-top:.5rem;">Günstigster Anbieter: <b>${best?best.forwarder:"—"}</b> (${best?money(best.total):"—"} €)</div>
-  `;
-});
-
-// ===== Init =====
-async function init(){
-  try {
-    await Promise.all([loadZones(), loadRates(), loadFloaters()]);
-    FORWARDERS = uniq([...ZONES.map(z=>z.forwarder), ...RATES.map(r=>r.forwarder)]);
-    showDataNotice(`Daten geladen: <b>${FORWARDERS.length}</b> Spediteure.`);
-    renderSkeleton();
-} catch (err) {
-    showDataNotice(`Fehler beim Laden der CSV-Dateien.<br><span class="muted">${String(err.message||err)}</span>`, true);
-FORWARDERS=[];
-    renderSkeleton();
-  }
-  updateMode();
-  validate();
-}
-init();
 </script>
 </body>
 </html>
