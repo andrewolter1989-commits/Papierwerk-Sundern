@@ -1,36 +1,239 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
-<head><meta charset="utf-8"><title>Dieselfloater Editor</title></head>
+<head>
+<meta charset="utf-8"/>
+<title>Dieselfloater – Papierwerk Sundern</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<style>
+:root{--b:#005A99;--t:#00A99D;--l:#F2F6F8;--w:#fff;--bd:#d6d6d6;--warn:#fff3cd;--err:#f8d7da;}
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:var(--l);margin:2rem;color:#333}
+h1{color:var(--b);margin:0 0 1rem 0}
+.card{background:var(--w);border:1px solid var(--bd);border-radius:10px;padding:1rem;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:1rem}
+.notice{margin-top:.25rem;padding:.75rem 1rem;border:1px solid var(--bd);border-radius:8px;background:var(--warn)}
+.notice.danger{background:var(--err)}
+.actions{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-top:.75rem}
+button{background:var(--b);color:#fff;border:0;border-radius:6px;padding:.6rem 1.1rem;font-weight:600;cursor:pointer}
+button:hover{background:var(--t)}
+.secondary{background:transparent;border:1px solid var(--bd);border-radius:6px;padding:.6rem 1.1rem;cursor:pointer;color:#333}
+.secondary:hover{background:#fff}
+table{width:100%;border-collapse:collapse;background:var(--w);border:1px solid var(--bd);border-radius:10px;overflow:hidden;margin-top:1rem}
+th,td{padding:.8rem;border-bottom:1px solid var(--bd);vertical-align:top}
+th{background:var(--b);color:#fff;text-align:left}
+tr:nth-child(even){background:var(--l)}
+input{width:140px;padding:.5rem .6rem;border:1px solid var(--bd);border-radius:6px;font-size:1rem}
+.muted{color:#666;font-size:.9rem}
+code{background:#f0f3f7;padding:2px 6px;border-radius:6px}
+</style>
+</head>
 <body>
-<h2>Dieselfloater Editor</h2>
-<div id="list"></div>
-<button onclick="download()">floater.json herunterladen</button>
+<h1>Dieselfloater – Papierwerk Sundern</h1>
+
+<div class="card">
+  <div class="notice">
+    Diese Seite erzeugt eine neue <code>floater.json</code> als Download. Danach im GitHub-Repo ersetzen und committen.
+  </div>
+
+  <div class="actions">
+    <button id="btnReload" type="button">Neu laden</button>
+    <button id="btnDownload" class="secondary" type="button">floater.json herunterladen</button>
+    <span class="muted" id="info"></span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Spediteur</th><th>Floater (%)</th></tr>
+    </thead>
+    <tbody id="tb"><tr><td colspan="2" class="muted">Lade…</td></tr></tbody>
+  </table>
+</div>
 
 <script>
-let data={};
-fetch("zones.csv").then(r=>r.text()).then(t=>{
-  const rows=t.trim().split(/\r?\n/).slice(1);
-  [...new Set(rows.map(r=>r.split(";")[0]))].forEach(f=>data[f]=0);
-  render();
-});
+async function fetchTextSmart(url){
+  const res = await fetch(url, {cache:"no-store"});
+  if (!res.ok) throw new Error(url + " konnte nicht geladen werden (HTTP " + res.status + ")");
+  const buf = await res.arrayBuffer();
+  const u8 = new Uint8Array(buf);
+  function hasBom(bytes, b0, b1){ return bytes.length >= 2 && bytes[0] === b0 && bytes[1] === b1; }
+  let encoding = "utf-8";
+  if (hasBom(u8, 0xFF, 0xFE)) encoding = "utf-16le";
+  else if (hasBom(u8, 0xFE, 0xFF)) encoding = "utf-16be";
+  else {
+    let nul = 0;
+    for (let i=0;i<Math.min(u8.length, 2000);i++) if (u8[i] === 0) nul++;
+    if (nul > 50) {
+      let nulEven = 0, nulOdd = 0;
+      for (let i=0;i<Math.min(u8.length, 2000);i++){
+        if (u8[i] === 0) { if (i % 2 === 0) nulEven++; else nulOdd++; }
+      }
+      encoding = (nulOdd > nulEven) ? "utf-16le" : "utf-16be";
+    }
+  }
+  const dec = new TextDecoder(encoding);
+  return dec.decode(buf);
+}
 
-function render(){
-  const d=document.getElementById("list"); d.innerHTML="";
-  Object.keys(data).forEach(f=>{
-    const i=document.createElement("input");
-    i.value=data[f];
-    i.oninput=()=>data[f]=Number(i.value);
-    d.append(f," ",i,document.createElement("br"));
+function normalizeHeader(s){
+  return String(s||"")
+    .replace(/\u0000/g,"")
+    .toLowerCase()
+    .replace(/[\u00A0]/g," ")
+    .replace(/[_\-]/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+
+function detectDelimiter(text){
+  text = text.replace(/\u0000/g,"");
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim().length>0);
+  const sample = lines.slice(0,5).join("\n");
+  const sc = (sample.match(/;/g)||[]).length;
+  const tc = (sample.match(/\t/g)||[]).length;
+  const cc = (sample.match(/,/g)||[]).length;
+  if (tc >= sc && tc >= cc && tc > 0) return "\t";
+  if (sc >= cc && sc > 0) return ";";
+  return ",";
+}
+
+function parseCsv(text){
+  text = text.replace(/^\uFEFF/, "").replace(/\u0000/g,"");
+  const delim = detectDelimiter(text);
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length>0);
+  const out = [];
+  for (const line of lines){
+    const row = [];
+    let cur = "";
+    let inQ = false;
+    for (let i=0;i<line.length;i++){
+      const ch = line[i];
+      if (ch === '"'){
+        if (inQ && line[i+1] === '"'){ cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (ch === delim && !inQ){
+        row.push(cur); cur = "";
+      } else cur += ch;
+    }
+    row.push(cur);
+    out.push(row.map(v => String(v ?? "").trim().replace(/\u0000/g,"")));
+  }
+  return out;
+}
+
+function findHeaderRowFlex(rows, requiredGroups){
+  for (let i=0;i<Math.min(rows.length, 50);i++){
+    const rowNorm = rows[i].map(c => normalizeHeader(c));
+    let ok = true;
+    for (const group of requiredGroups){
+      if (!group.some(g => rowNorm.includes(g))) { ok = false; break; }
+    }
+    if (ok) return { headerIndex:i, headerNorm:rowNorm, headerRaw: rows[i] };
+  }
+  return null;
+}
+
+async function loadForwardersFromZones(){
+  const text = await fetchTextSmart("zones.csv");
+  const rows = parseCsv(text);
+  const found = findHeaderRowFlex(rows, [["forwarder"],["dest from","destination from"],["dest to","destination to"],["zone"]]);
+  if(!found) return [];
+  const idxF = found.headerNorm.indexOf("forwarder");
+  const set = new Set();
+  for(let i=found.headerIndex+1;i<rows.length;i++){
+    const f = (rows[i][idxF]||"").trim();
+    if(f) set.add(f);
+  }
+  return Array.from(set);
+}
+
+async function loadForwardersFromRates(){
+  const text = await fetchTextSmart("rates.csv");
+  const rows = parseCsv(text);
+  const found = findHeaderRowFlex(rows, [["forwarder","spediteur","carrier"]]);
+  if(!found) return [];
+  const h = found.headerNorm;
+  const idxF = h.indexOf("forwarder")>=0 ? h.indexOf("forwarder") : (h.indexOf("spediteur")>=0 ? h.indexOf("spediteur") : h.indexOf("carrier"));
+  const set = new Set();
+  for(let i=found.headerIndex+1;i<rows.length;i++){
+    const f = (rows[i][idxF]||"").trim();
+    if(f) set.add(f);
+  }
+  return Array.from(set);
+}
+
+async function loadFloaters(){
+  try{
+    const r = await fetch("floater.json", {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    return (typeof j === "object" && j) ? j : {};
+  }catch(e){
+    return {};
+  }
+}
+
+const tb = document.getElementById("tb");
+const info = document.getElementById("info");
+let floaters = {};
+
+function render(forwarders){
+  tb.innerHTML = "";
+  for(const f of forwarders){
+    const pct = (floaters[f] ?? 0);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${f}</td>
+      <td><input inputmode="decimal" value="${String(pct).replace(".",",")}" data-f="${f}" /></td>
+    `;
+    tb.appendChild(tr);
+  }
+  tb.querySelectorAll("input[data-f]").forEach(inp=>{
+    inp.addEventListener("input", () => {
+      const f = inp.getAttribute("data-f");
+      const v = String(inp.value||"").trim().replace(/\\./g,'').replace(/,/g,'.');
+      const n = Number(v);
+      floaters[f] = Number.isFinite(n) ? n : 0;
+    });
   });
 }
 
-function download(){
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="floater.json";
+function downloadJson(){
+  const blob = new Blob([JSON.stringify(floaters, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "floater.json";
+  document.body.appendChild(a);
   a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
 }
+
+async function reload(){
+  try{
+    info.textContent = "Lade…";
+    floaters = await loadFloaters();
+
+    const f1 = await loadForwardersFromZones();
+    const f2 = await loadForwardersFromRates();
+    const set = new Set([...f1, ...f2]);
+    const forwarders = Array.from(set).sort((a,b)=>a.localeCompare(b,"de"));
+
+    // ensure all forwarders have a key
+    for(const f of forwarders){
+      if(!(f in floaters)) floaters[f] = 0;
+    }
+
+    render(forwarders);
+    info.textContent = `Spediteure: ${forwarders.length}`;
+  }catch(e){
+    tb.innerHTML = `<tr><td colspan="2" style="color:#842029">Fehler: ${e.message}</td></tr>`;
+    info.textContent = "";
+    console.error(e);
+  }
+}
+
+document.getElementById("btnReload").addEventListener("click", reload);
+document.getElementById("btnDownload").addEventListener("click", downloadJson);
+reload();
 </script>
 </body>
 </html>
