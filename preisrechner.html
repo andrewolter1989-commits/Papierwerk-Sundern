@@ -52,11 +52,7 @@ pre{white-space:pre-wrap;background:#f0f3f7;border:1px solid var(--bd);border-ra
       </div>
       <div class="notice" id="dataNotice"></div>
       <div class="notice danger" id="inputNotice"></div>
-      <details id="debugBox" style="display:none">
-        <summary class="muted">Debug (Rates-Mapping)</summary>
-        <pre id="debugPre"></pre>
-      </details>
-    </div>
+</div>
     <div>
       <div class="field">
         <label for="pallets">Paletten:</label>
@@ -78,10 +74,7 @@ pre{white-space:pre-wrap;background:#f0f3f7;border:1px solid var(--bd);border-ra
         <button class="secondary" type="button" id="reset">Zurücksetzen</button>
         <span class="muted" id="modeLabel"></span>
       </div>
-      <div class="muted small" style="margin-top:.5rem;">
-        Dateien werden relativ geladen: <b>zones.csv</b>, <b>rates.csv</b>, <b>floater.json</b>.
-      </div>
-    </div>
+</div>
   </div>
   <div class="summary" id="summary"></div>
 </div>
@@ -202,6 +195,102 @@ function uniq(arr){
 }
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 function money(n){ return Number.isFinite(n) ? n.toLocaleString("de-DE",{minimumFractionDigits:2, maximumFractionDigits:2}) : "—"; }
+
+
+// ===== Zentraler Log via GitHub (GitHub Pages kompatibel) =====
+// ACHTUNG: Token liegt im Frontend. Nur nutzen, wenn das für euch ok ist.
+const GITHUB_OWNER  = "andrewo...";          // <- anpassen
+const GITHUB_REPO   = "Papierwerk-Sundern";  // <- anpassen
+const GITHUB_BRANCH = "main";                // <- anpassen (meist main)
+const GITHUB_TOKEN  = "";                    // <- Fine-grained PAT (Contents: Read/Write)
+const LOG_PATH      = "log.csv";             // <- Datei im Repo (Root). Alternativ: "logs/log.csv"
+
+function fmtLocalDateTime(d){
+  const pad = (n)=>String(n).padStart(2,"0");
+  return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function base64EncodeUtf8(str){
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function base64DecodeUtf8(b64){
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+async function ghFetch(url, opts={}){
+  const headers = Object.assign({
+    "Accept":"application/vnd.github+json"
+  }, opts.headers || {});
+  if (GITHUB_TOKEN && GITHUB_TOKEN.trim()) headers["Authorization"] = `Bearer ${GITHUB_TOKEN.trim()}`;
+  return fetch(url, Object.assign({}, opts, {headers}));
+}
+
+async function appendLogToGitHub(entry){
+  // Fail silently when not configured
+  if (!GITHUB_TOKEN || !GITHUB_TOKEN.trim() || !GITHUB_OWNER || !GITHUB_REPO) return;
+
+  const apiBase = `https://api.github.com/repos/${encodeURIComponent(GITHUB_OWNER)}/${encodeURIComponent(GITHUB_REPO)}/contents/${encodeURIComponent(LOG_PATH)}`;
+  const header = "Zeit;PLZ;Paletten;Lademeter;LM_pro_Palette;LM_Mode;Cheapest;Cheapest_EUR\n";
+  const line = [
+    entry.time,
+    entry.plz,
+    entry.pallets,
+    entry.lm,
+    entry.lmPerPallet,
+    entry.lmMode,
+    entry.cheapest,
+    entry.cheapestEur
+  ].map(v => String(v ?? "").replaceAll(";", ",")).join(";") + "\n";
+
+  for (let attempt=1; attempt<=5; attempt++){
+    let currentText = "";
+    let sha = null;
+
+    const getRes = await ghFetch(`${apiBase}?ref=${encodeURIComponent(GITHUB_BRANCH)}`, {method:"GET"});
+    if (getRes.status === 404){
+      // create new file with header + first line
+      currentText = header + line;
+    } else if (getRes.ok){
+      const j = await getRes.json();
+      sha = j.sha;
+      const decoded = base64DecodeUtf8(j.content.replace(/\n/g,""));
+      currentText = decoded;
+      if (!currentText.startsWith("Zeit;")) currentText = header + currentText;
+      currentText += line;
+    } else {
+      const t = await getRes.text();
+      console.warn("GitHub log GET failed:", getRes.status, t);
+      return;
+    }
+
+    const putBody = {
+      message: `log: ${entry.plz} ${entry.lm}LM`,
+      content: base64EncodeUtf8(currentText),
+      branch: GITHUB_BRANCH
+    };
+    if (sha) putBody.sha = sha;
+
+    const putRes = await ghFetch(apiBase, {method:"PUT", body: JSON.stringify(putBody)});
+    if (putRes.ok) return;
+
+    // 409/422 = race condition / sha outdated -> retry
+    if (putRes.status === 409 || putRes.status === 422){
+      await new Promise(r=>setTimeout(r, 250 * attempt));
+      continue;
+    }
+
+    const t = await putRes.text();
+    console.warn("GitHub log PUT failed:", putRes.status, t);
+    return;
+  }
+  console.warn("GitHub log: too many retries");
+}
 
 // ===== Data =====
 let ZONES=[], RATES=[], FORWARDERS=[], FLOATERS={};
@@ -434,6 +523,23 @@ function renderSkeleton(){
   if(!FORWARDERS.length){
     const tr=document.createElement("tr");
     tr.innerHTML=`<td colspan="7" class="muted">Noch keine Daten geladen.</td>`;
+
+  // Zentral loggen (GitHub)
+  try{
+    const now = new Date();
+    await appendLogToGitHub({
+      time: fmtLocalDateTime(now),
+      plz: plzVal,
+      pallets: p,
+      lm: (Math.round(lm*100)/100).toFixed(2).replace(".", ","),  // de Format
+      lmPerPallet: lmPerPallet.toFixed(1).replace(".", ","),
+      lmMode: lmManuallyOverridden ? "manuell" : "auto",
+      cheapest: best ? best.forwarder : "",
+      cheapestEur: best ? money(best.total).replace(".", "") : ""
+    });
+  }catch(e){
+    console.warn("Log konnte nicht geschrieben werden:", e);
+  }
     tbody.appendChild(tr);
     return;
   }
@@ -543,23 +649,11 @@ async function init(){
   try {
     await Promise.all([loadZones(), loadRates(), loadFloaters()]);
     FORWARDERS = uniq([...ZONES.map(z=>z.forwarder), ...RATES.map(r=>r.forwarder)]);
-    showDataNotice(`Daten geladen: <b>${FORWARDERS.length}</b> Spediteure aus zones.csv / rates.csv. Floater aus floater.json.`);
+    showDataNotice(`Daten geladen: <b>${FORWARDERS.length}</b> Spediteure.`);
     renderSkeleton();
-
-    // Show rates mapping debug (useful until everything works)
-    debugBox.style.display="block";
-    debugPre.textContent = JSON.stringify(RATES_DEBUG, null, 2);
-
-  } catch (err) {
+} catch (err) {
     showDataNotice(`Fehler beim Laden der CSV-Dateien.<br><span class="muted">${String(err.message||err)}</span>`, true);
-    if (typeof RATES_DEBUG === "object" && Object.keys(RATES_DEBUG||{}).length){
-      debugBox.style.display="block";
-      debugPre.textContent = JSON.stringify(RATES_DEBUG, null, 2);
-    } else {
-      debugBox.style.display="none";
-      debugPre.textContent="";
-    }
-    FORWARDERS=[];
+FORWARDERS=[];
     renderSkeleton();
   }
   updateMode();
